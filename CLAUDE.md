@@ -4,18 +4,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-This repo currently contains **only planning documents** — no code, no `package.json`, no
-Playwright project, and (per the environment) no git repository has been initialized yet.
-Phase 0 (scaffolding) has not started. Do not assume any tooling, folder structure, or
-commands exist beyond what's described below until they've actually been created.
+Phase 0 (scaffolding) is in progress on `feature/scaffolding`. Playwright + TypeScript project,
+Docker/CI setup, and a trivial smoke test now exist (see "Commands" and "Architecture" below).
+Later phases (locator manifest schema, deterministic healing, AI healing, quality add-ons,
+hardening) have not started — don't assume anything from those phases exists until it's
+actually been built. Check `PROGRESS.md` first in any new session for exact current state
+before re-reading `REQUIREMENTS.md`/`PLAN.md` in full.
 
-Read these three files in full before doing any work — they are the spec, not background
-reading:
+Read these three files in full before doing any work on a new phase — they are the spec, not
+background reading:
 
 - `REQUIREMENTS.md` — non-negotiable scope and philosophy for the whole project.
 - `PLAN.md` — the phased build order, one feature branch per phase.
 - `PROGRESS.md` — current state; check this first in any new session before re-reading the
   other two in full.
+
+## Commands
+
+```bash
+# Run the suite via Docker (matches CI exactly — preferred)
+docker compose run --rm tests
+
+# Native local run (faster iteration; requires local browsers)
+npm install
+npx playwright install --with-deps
+npm test                       # all projects (chromium/firefox/webkit)
+npx playwright test --project=chromium   # single browser
+npx playwright test tests/smoke.spec.ts  # single file
+npm run test:ui                # Playwright UI mode
+npm run test:headed            # headed browser
+npm run report                 # open last HTML report
+
+# Record a new test
+npx playwright codegen <url>
+```
+
+There is no separate lint/typecheck script yet; `tsc` types are enforced implicitly by
+`ts-node`/Playwright's TS loader at test-run time. `BASE_URL` env var is unset by default — the
+Phase 0 smoke test targets an absolute URL directly since no real app under test is wired up
+yet.
 
 ## Core philosophy (from REQUIREMENTS.md — non-negotiable)
 
@@ -50,19 +77,31 @@ participant**:
 5. Start the next phase from the (now-updated) base branch, not from the previous feature
    branch.
 
-## Architecture (as planned — build incrementally per PLAN.md phases)
+## Architecture
 
-- `tests/` — Playwright `.spec.ts` files, recorded via Codegen, structured as Page Objects.
+Existing (Phase 0):
+
+- `tests/` — Playwright `.spec.ts` files, recorded via Codegen, structured as Page Objects
+  under `tests/pages/` (see `tests/pages/PlaywrightHomePage.ts` + `tests/smoke.spec.ts`).
 - `manifests/` — one JSON file per spec, keyed by element name, each with a `primary` locator
-  plus 2-3 `fallbacks` (role/test-id/CSS). Consulted only on locator failure.
-- `scripts/` — tooling such as the manifest-scaffolding script (scans a `.spec.ts` and
-  heuristically suggests fallback locators for human review) and the self-healing
-  patch/PR mechanism.
-- `.github/workflows/` — CI, running inside the same container image used locally (see below),
-  with deterministic-run and AI-healing cost/time clearly separated in logs.
-- Container: based on `mcr.microsoft.com/playwright`, used both locally (`docker compose run
-  tests`) and in CI, so browser/OS versions are pinned identically everywhere. This only fixes
-  the execution environment — it must not change any self-healing/manifest/AI logic.
+  plus 2-3 `fallbacks` (role/test-id/CSS). Consulted only on locator failure; not yet wired
+  into any runtime logic (that's Phase 2). Schema in `manifests/smoke.json` is provisional
+  until Phase 1 formalizes it.
+- `.github/workflows/tests.yml` — CI, running inside the same container image used locally,
+  triggered on PRs + nightly cron. AI-healing cost/time separation in logs is deferred until
+  Phase 3 introduces AI calls.
+- `Dockerfile` / `docker-compose.yml` — based on `mcr.microsoft.com/playwright`, pinned to the
+  exact version installed in `package.json` (keep these two in lockstep when bumping
+  Playwright). `docker compose run --rm tests` locally runs the same image/command as CI.
+- `playwright.config.ts` — three browser projects (chromium/firefox/webkit), HTML + list
+  reporters, `BASE_URL` read from env (unset for now).
+
+Not yet built (later phases per PLAN.md) — do not assume these exist:
+
+- `scripts/` — currently empty; will hold the manifest-scaffolding script (scans a `.spec.ts`
+  and heuristically suggests fallback locators) and the self-healing patch/PR mechanism.
+- Any locator-failure retry logic, self-healing, or AI escalation (Phases 2-3).
+- `@axe-core/playwright` accessibility checks and `toHaveScreenshot()` baselines (Phase 4).
 
 Self-healing pipeline, in order, per REQUIREMENTS.md 3.3:
 1. Test runs normally — no AI.

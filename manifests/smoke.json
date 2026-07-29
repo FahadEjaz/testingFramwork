@@ -1,0 +1,19 @@
+{
+  "spec": "tests/smoke.spec.ts",
+  "elements": {
+    "getStartedLink": {
+      "primary": { "strategy": "role", "value": "link[name=\"Get started\"]" },
+      "fallbacks": [
+        { "strategy": "testId", "value": "get-started-link" },
+        { "strategy": "css", "value": "a.getStarted_Sjon" }
+      ]
+    },
+    "heading": {
+      "primary": { "strategy": "role", "value": "heading[name=\"Installation\"]" },
+      "fallbacks": [
+        { "strategy": "testId", "value": "installation-heading" },
+        { "strategy": "css", "value": "h1#installation" }
+      ]
+    }
+  }
+}
