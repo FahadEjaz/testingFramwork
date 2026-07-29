@@ -4,15 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Phase 0 (scaffolding) is merged into `main`. Phase 1 (recording pipeline & locator manifest) is
-in progress on `feature/locator-manifest`: the manifest schema is formalized
-(`manifests/schema.json`), `scripts/generate-manifest.js` scaffolds real manifests from either a
-Page Object or raw-inline locators, and a point-and-click recorder
-(`scripts/record-test.sh`/`record-test.js`, zenity-based) is the primary recording workflow —
-`npx playwright codegen` remains as a documented developer-facing alternative. Later phases
-(deterministic healing, AI healing, quality add-ons, hardening) have not started — don't assume
-anything from those phases exists until it's actually been built. Check `PROGRESS.md` first in
-any new session for exact current state before re-reading `REQUIREMENTS.md`/`PLAN.md` in full.
+Phase 0 (scaffolding) and Phase 1 (recording pipeline & locator manifest) are merged into
+`main`. Phase 2 (deterministic self-healing) is in progress on
+`feature/deterministic-healing`: tests opt in to fallback healing by calling
+`resilientLocator(...)` (`tests/support/resilient-locator.ts`) instead of using a locator
+directly; on primary-locator failure it tries each manifest fallback in order (no AI), logs a
+`[SELF-HEALED]` line, and records the event to `test-results/healing-events.jsonl`.
+`scripts/apply-healing-patches.js` then patches the manifest + spec and commits the fix to a
+local `auto/healed-<timestamp>` branch (never pushed/PR'd automatically — that's a documented
+manual follow-up). `tests/self-healing-demo.spec.ts` is the worked example (deliberately broken
+primary locator). Later phases (AI healing, quality add-ons, hardening) have not started —
+don't assume anything from those phases exists until it's actually been built. Check
+`PROGRESS.md` first in any new session for exact current state before re-reading
+`REQUIREMENTS.md`/`PLAN.md` in full.
 
 Read these three files in full before doing any work on a new phase — they are the spec, not
 background reading:
@@ -44,6 +48,9 @@ scripts/record-test.sh          # double-click, or run directly; needs zenity
 # Record a new test — developer/CLI path
 npx playwright codegen <url> --output tests/<name>.spec.ts
 node scripts/generate-manifest.js tests/<name>.spec.ts
+
+# After a run that self-healed a locator, patch + commit the fix to its own branch
+node scripts/apply-healing-patches.js
 ```
 
 There is no separate lint/typecheck script yet; `tsc` types are enforced implicitly by
@@ -87,7 +94,7 @@ participant**:
 
 ## Architecture
 
-Existing (Phase 0 + Phase 1):
+Existing (Phase 0 + Phase 1 + Phase 2):
 
 - `tests/` — Playwright `.spec.ts` files. `tests/smoke.spec.ts` uses a Page Object
   (`tests/pages/PlaywrightHomePage.ts`); `tests/theme-toggle.spec.ts` and
@@ -107,6 +114,18 @@ Existing (Phase 0 + Phase 1):
 - `scripts/record-test.js` + `scripts/record-test.sh` — point-and-click recorder for
   non-developers: zenity pop-ups for URL + test name, runs Codegen with `--output`, then
   auto-runs `generate-manifest.js` on the result. Requires a Linux desktop with `zenity`.
+- `tests/support/resilient-locator.ts` — `resilientLocator(page, spec, elementKey,
+  primaryFactory)`. Manifest is untouched on the normal path; only read after the primary
+  locator fails, then each fallback is tried in order (no AI). Logs `[SELF-HEALED]` and appends
+  to `test-results/healing-events.jsonl` (`HEALING_LOG_PATH` env var overrides the path) on
+  success; rethrows the original error if every fallback also fails.
+- `scripts/apply-healing-patches.js` — reads `healing-events.jsonl`, patches the manifest
+  (promotes the working fallback to `primary`) and the `.spec.ts` (via
+  `scripts/lib/patch-spec-locator.js`, a TS-compiler-API-based rewrite of just the
+  `resilientLocator(...)` call's locator expression) for each healed element, then commits both
+  to a local `auto/healed-<timestamp>` branch and switches back — never pushes, never opens a
+  PR. Refuses to run if the target spec/manifest aren't already committed and clean (patching
+  an untracked file and switching branches would make it vanish from the working tree).
 - `.github/workflows/tests.yml` — CI, running inside the same container image used locally,
   triggered on PRs + nightly cron. AI-healing cost/time separation in logs is deferred until
   Phase 3 introduces AI calls.
@@ -118,11 +137,14 @@ Existing (Phase 0 + Phase 1):
 
 Not yet built (later phases per PLAN.md) — do not assume these exist:
 
-- Any locator-failure retry logic, self-healing, or AI escalation (Phases 2-3) — including the
-  self-healing patch/PR mechanism in `scripts/`.
+- AI escalation (Phase 3) — the scoped-context extractor, the model call, and the
+  cost/usage log line. Nothing in the codebase calls an AI model anywhere yet.
+- Automatic `git push`/PR creation for a healed branch — `apply-healing-patches.js` stops at a
+  local commit by design; pushing/opening the PR is a documented manual (or future CI) step.
 - `@axe-core/playwright` accessibility checks and `toHaveScreenshot()` baselines (Phase 4).
 
-Self-healing pipeline, in order, per REQUIREMENTS.md 3.3:
+Self-healing pipeline, in order, per REQUIREMENTS.md 3.3 (steps 1-3 implemented in Phase 2,
+step 4 is Phase 3):
 1. Test runs normally — no AI.
 2. On locator failure, try each manifest fallback in order — no AI.
 3. If a fallback works, auto-patch the `.spec.ts` + manifest and open a PR on a dedicated

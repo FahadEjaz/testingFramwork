@@ -11,9 +11,11 @@ philosophy and `PLAN.md` for the phased build order. `PROGRESS.md` tracks curren
 - `manifests/` — one JSON file per spec, keyed by element name, each with a `primary` locator
   plus 2-3 `fallbacks`. Read only when a locator fails at runtime — never during a normal
   passing run.
-- `scripts/` — `record-test.js`/`record-test.sh` (point-and-click test recorder) and
-  `generate-manifest.js` (manifest scaffolding); self-healing patch/PR logic lands in a later
-  phase.
+- `scripts/` — `record-test.js`/`record-test.sh` (point-and-click test recorder),
+  `generate-manifest.js` (manifest scaffolding), and `apply-healing-patches.js` (commits a
+  healed locator fix to its own branch after a test run); AI escalation lands in Phase 3.
+- `tests/support/resilient-locator.ts` — the locator wrapper tests call to get deterministic
+  fallback healing (see "Self-healing" below).
 - `.github/workflows/` — CI, running inside the same container image used locally.
 - `Dockerfile` / `docker-compose.yml` — pin the exact browser/OS environment so local and CI
   runs are identical.
@@ -88,6 +90,30 @@ Page Object it imports) for `page.getBy*()`/`page.locator()` calls. Its fallback
 are heuristic placeholders marked `TODO` — always review and fill in real values before relying
 on them for self-healing.
 
+## Self-healing (deterministic, no AI)
+
+A test that wants fallback healing calls `resilientLocator(page, specPath, elementKey,
+() => <primary locator>)` instead of using the primary locator directly — see
+`tests/self-healing-demo.spec.ts` for a worked example with a deliberately broken primary. On
+the normal path (primary resolves) the manifest is never even read. Only if the primary times
+out does it load `manifests/<spec>.json` and try each fallback in order; a `[SELF-HEALED]`
+line is logged the moment one works, and the event is appended to
+`test-results/healing-events.jsonl` (override the path with `HEALING_LOG_PATH`).
+
+After a run with healing events, `node scripts/apply-healing-patches.js`:
+1. Patches the manifest (promotes the working fallback to `primary`, demotes the old primary
+   into `fallbacks`) and the `.spec.ts` (swaps in the new locator's code) for each healed
+   element.
+2. Commits those two files to a fresh local branch, `auto/healed-<unix-ms>`, then switches back
+   to whatever branch you were on.
+3. Does **not** push or open a PR — it prints the `git push`/`gh pr create` commands for you to
+   run once you've reviewed the diff. No AI is involved in this path; that's Phase 3.
+
+This script refuses to run if the spec/manifest it would patch aren't already committed and
+clean on your current branch — patching an untracked file and then switching branches would
+make that file vanish from your working tree (it'd only exist on the new `auto/healed-*`
+branch). Commit your recorded test before relying on self-healing.
+
 ## Environment variables
 
 - `BASE_URL` — base URL of the app under test. Unset in Phase 0 since the smoke test targets
@@ -97,4 +123,4 @@ on them for self-healing.
 
 ## Current status
 
-Phase 1 (recording pipeline & locator manifest) — see `PROGRESS.md` for details and next steps.
+Phase 2 (deterministic self-healing) — see `PROGRESS.md` for details and next steps.

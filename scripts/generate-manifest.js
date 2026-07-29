@@ -9,6 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 const { extractLocators } = require('./lib/extract-locators');
+const { manifestPathForSpec } = require('./lib/manifest');
 
 const STRATEGY_PRIORITY = ['testId', 'css', 'role', 'text'];
 
@@ -80,7 +81,7 @@ function main() {
   }
 
   const manifest = { spec: specRelative, elements };
-  const manifestPath = path.join(repoRoot, 'manifests', `${path.basename(specPath, '.spec.ts')}.json`);
+  const manifestPath = manifestPathForSpec(repoRoot, specRelative);
 
   if (fs.existsSync(manifestPath) && !force) {
     console.error(`${path.relative(repoRoot, manifestPath)} already exists — re-run with --force to overwrite.`);

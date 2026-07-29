@@ -1,0 +1,12 @@
+{
+  "spec": "tests/self-healing-demo.spec.ts",
+  "elements": {
+    "getStartedLink": {
+      "primary": { "strategy": "css", "value": "a.getStarted_SOMESTALECLASS" },
+      "fallbacks": [
+        { "strategy": "role", "role": "link", "name": "Get started" },
+        { "strategy": "testId", "value": "get-started-link" }
+      ]
+    }
+  }
+}

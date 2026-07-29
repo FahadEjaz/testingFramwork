@@ -5,86 +5,115 @@
 > check here before re-reading REQUIREMENTS.md or PLAN.md in full.
 
 ## Current phase
-Phase 1 — Recording pipeline & locator manifest
+Phase 2 — Deterministic self-healing (no AI)
 
 ## Status
-Ready for review — schema formalized, generator script scaffolds real manifests from either
-Page Object or raw-inline specs, and 3 example tests (1 carried over + 2 new) pass green
-against real DOM on chromium.
+Ready for review — the fallback-healing hook, the manifest+spec patch mechanism, and a
+deliberately-broken-locator demo all work end to end and were verified live (not just read
+through). All 4 specs pass green on chromium.
 
 ## Completed this session
-- Merged `feature/scaffolding` into `main` (Phase 0 sign-off — done before this phase started).
-- Formalized the locator manifest schema: `manifests/schema.json` (JSON Schema, draft
-  2020-12). A locator entry is a discriminated union — `{ strategy: "role", role, name? }` or
-  `{ strategy: "testId"|"css"|"text"|"label"|"placeholder", value }` — matching the actual
-  Playwright locator methods 1:1 (`getByRole`/`getByTestId`/`getByText`/`getByLabel`/
-  `getByPlaceholder`/`locator`). Each element requires 2-3 fallbacks.
-- `scripts/lib/extract-locators.js` + `scripts/generate-manifest.js`: scans a `.spec.ts` (and
-  any Page Object it imports from `./pages/`) via the TypeScript compiler API for
-  `page.getBy*()`/`page.locator()`/`this.page.getBy*()` calls, derives an element name from the
-  assigned variable/property (or a heuristic slug from the accessible name/value when the
-  locator is inline with no variable), and writes `manifests/<spec-name>.json`. Fallback
-  locators it can't verify (no live DOM access) are explicit `TODO` placeholders, not
-  fabricated-looking guesses — human review before Phase 2+ relies on them.
-- Recording workflow pivoted mid-session at the user's request: the primary recording path is
-  now a point-and-click launcher (`scripts/record-test.sh` → `scripts/record-test.js`), not a
-  typed CLI command. It uses `zenity` for two plain-English pop-up prompts (URL, test name),
-  runs Codegen with `--output` to save directly to `tests/<name>.spec.ts`, then automatically
-  invokes `generate-manifest.js` on the result. The `npx playwright codegen <url>` CLI path is
-  kept and documented as the developer-facing alternative.
-- Regenerated `manifests/smoke.json` via the new script (`--force`) — output matches the
-  original hand-written shape exactly (`getStartedLink`/`heading` keys, correct role+name),
-  validating the generator against the one existing recorded test.
-- Two new hand-authored recorded-style tests (agent has no hands to click through Codegen's
-  interactive browser, so these mimic Codegen's raw-inline-locator output; locators were
-  ground-truthed against the live site via browser automation before writing, not guessed):
-  - `tests/theme-toggle.spec.ts` — nav bar dark/light toggle; stresses a role locator whose
-    accessible name changes after interaction.
-  - `tests/search-locators.spec.ts` — DocSearch modal; stresses button/searchbox/link/heading
-    role locators and a manifest key collision (link + heading both named "Locators" → dedup to
-    `locators`/`locators2`).
-  - Manifests generated for both (`manifests/theme-toggle.json`, `manifests/search-locators.json`).
-  - All 3 specs verified green: `npx playwright test tests/theme-toggle.spec.ts
-    tests/search-locators.spec.ts tests/smoke.spec.ts --project=chromium`.
-- `package.json`: added `npm run record` (→ `record-test.js`) and `npm run manifest:generate`
-  (→ `generate-manifest.js <spec>`).
-- `README.md`: point-and-click recording workflow, terminal alternative, and a new "Locator
-  manifests" section documenting the schema/generator.
+- Merged `feature/locator-manifest` into `main` (Phase 1 sign-off — done before this phase
+  started; you committed/merged it yourself).
+- `tests/support/resilient-locator.ts`: `resilientLocator(page, specRelativePath, elementKey,
+  primaryFactory, opts?)`. Tries the primary locator first with a short `waitFor({state:
+  'visible'})` — manifest is never read on this path, per REQUIREMENTS.md 3.2. On timeout,
+  loads `manifests/<spec>.json` and tries each `fallbacks[]` entry in order (via
+  `scripts/lib/manifest.js`'s `buildLocatorFromEntry`); first one that resolves wins. Logs a
+  `[SELF-HEALED] spec=... element=... fallback#N strategy=...` line and appends a JSON event to
+  `test-results/healing-events.jsonl` (path overridable via `HEALING_LOG_PATH` — the real
+  `test-results/` in this sandbox is root-owned from an earlier `docker compose run`, see
+  Decisions below). If every fallback also fails, rethrows the original error — test fails for
+  real, nothing logged/patched.
+- `scripts/lib/manifest.js`: shared `manifestPathForSpec`/`loadManifestForSpec`/`saveManifest`/
+  `buildLocatorFromEntry` (manifest entry → real Locator) /`codeForEntry` (manifest entry →
+  the Playwright source code string for it, used when patching a spec file). Refactored
+  `generate-manifest.js` to reuse `manifestPathForSpec` instead of duplicating the path logic.
+- `scripts/lib/patch-spec-locator.js`: TypeScript-compiler-API-based patch — finds the exact
+  `resilientLocator(page, spec, 'elementKey', () => <expr>)` call for a given element key and
+  replaces just `<expr>`, leaving the rest of the file untouched. Chosen over regex because a
+  locator's own arguments can contain commas/parens that make "find the matching close paren"
+  unreliable with naive string matching.
+- `scripts/apply-healing-patches.js`: reads `healing-events.jsonl` (deduped to the latest event
+  per spec+element), patches the manifest (new primary = the working fallback; old primary
+  demoted into `fallbacks`) and the spec file for each, commits both to a local
+  `auto/healed-<unix-ms>` branch, then switches back to whatever branch you were on. Does
+  **not** `git push` or `gh pr create` — prints those commands for a human to run after
+  reviewing the diff (per your explicit choice this session — see Decisions).
+- `tests/self-healing-demo.spec.ts` + `manifests/self-healing-demo.json`: worked example with a
+  deliberately broken primary locator (stale CSS selector) and a correct role-locator fallback.
+  Verified live: primary fails, `[SELF-HEALED]` logs, test still passes, event lands in
+  `healing-events.jsonl`, and `apply-healing-patches.js` correctly rewrites both files (verified
+  via `git diff` against the resulting `auto/healed-*` branch, then reverted for reasons below).
+- **Bug found and fixed during this session's own testing** (not just written and assumed
+  correct): `resilientLocator`'s fallback loop swallowed *any* error from `recordHealingEvent`
+  (including this sandbox's `test-results/` `EACCES` permission error) inside the same
+  catch-and-try-next-fallback block, which made a successfully-healed locator look like a
+  failed one and masked the real cause. Fixed by moving the healing-event write into its own
+  try/catch that only warns, so a logging failure can never affect whether the healed locator
+  is actually returned.
+- **Second bug found and fixed**: `apply-healing-patches.js`'s "patch, commit to a new branch,
+  switch back" flow only correctly restores the original branch if the patched files were
+  already committed there. Ran it against this session's own uncommitted demo files as a live
+  test — confirmed they got committed onto the new `auto/healed-*` branch and then *disappeared
+  from the working tree* on switching back (recoverable via the other branch, not actually
+  lost, but a real surprise/footgun for a script that mutates git state). Fixed by adding
+  `assertCleanAndTracked()`, which now refuses to run unless every file it would touch is
+  already committed and clean on the current branch. Re-verified the guard fires correctly
+  instead of repeating the bug.
+- Full 4-spec suite (`smoke`, `theme-toggle`, `search-locators`, `self-healing-demo`) verified
+  green together on chromium after both fixes.
 
 ## Pending / next steps
-- Hand off `feature/locator-manifest` for human review.
-- A human (with a real desktop) should actually double-click `scripts/record-test.sh` at least
-  once to confirm the zenity dialogs and Codegen handoff behave as expected end-to-end — this
-  session could only syntax-check the script and validate its `codegen`/`generate-manifest.js`
-  pieces individually, not the full interactive click-through (no GUI hands available here).
-- Firefox/webkit not re-verified this session (only chromium, natively, to keep iteration
-  fast) — full 3-browser pass should happen in Docker before/at merge, same as Phase 0.
-- Fill in the `TODO` fallback locators across all 3 manifests with real test-id/CSS values
-  before Phase 2 (deterministic self-healing) starts relying on them.
-- Start Phase 2 only after this branch is reviewed/merged into `main`.
+- Hand off `feature/deterministic-healing` for human review.
+- Firefox/webkit not re-verified this session (chromium only, natively) — full 3-browser pass
+  should happen in Docker before/at merge, same caveat as Phases 0-1.
+- `apply-healing-patches.js` was only exercised against the demo spec in isolation (git branch
+  create/commit/switch-back, and the AST patch, each verified working) — never run against an
+  *already-committed* baseline end-to-end in this session, since committing is your call, not
+  mine. Worth a human dry run: commit the demo files as-is (still showing the broken primary),
+  run the suite, then run `apply-healing-patches.js` for real.
+- CI isn't wired to run `apply-healing-patches.js` automatically after a healed run, nor does
+  the CI log distinguish "healed" from "clean pass" beyond the `[SELF-HEALED]` console line —
+  the fuller CI cost/time separation from REQUIREMENTS.md 3.4 is more naturally a Phase 3 thing
+  (that's when AI cost enters the picture), but flagging it wasn't fully addressed here either.
+- Existing Phase 1 tests (`smoke`, `theme-toggle`, `search-locators`) don't use
+  `resilientLocator` — only the new demo test does. Migrating them is optional, not required by
+  PLAN.md's Phase 2 "done when" criterion, but worth deciding before Phase 3.
+- Start Phase 3 (AI healing escalation) only after this branch is reviewed/merged into `main`.
 
 ## Decisions & deviations from PLAN.md
-- Recording workflow is a GUI launcher (zenity pop-ups + Codegen), not the CLI-only workflow
-  PLAN.md originally implied — changed mid-session per explicit user request: target users are
-  laymen, not developers, and no CLI syntax should be required to record a test. The CLI path
-  (`npx playwright codegen`) is retained as a documented developer fallback and is what
-  `record-test.js` calls under the hood.
-- `generate-manifest.js` scans raw inline locators as well as Page Object constructors, wider
-  than PLAN.md's literal phrasing ("scans a .spec.ts file") — necessary because the new
-  recording flow no longer requires a Page Object to exist before a manifest can be scaffolded.
-- Fallback locators are explicit `TODO` placeholders rather than plausible-looking guessed
-  values (e.g. no fabricated CSS class names) — the script has no live-DOM access on this
-  failure path, and a fabricated-but-wrong-looking-real value seemed more dangerous than an
-  honest placeholder a human can't miss.
-- Only chromium was run natively this session (matches the same sandbox limitation noted in
-  Phase 0 — no sudo for OS deps for firefox/webkit outside Docker).
+- The patch/commit mechanism runs as a **separate script after the test run**
+  (`apply-healing-patches.js`), not inline inside the failing test's fixture teardown. Reason:
+  Playwright runs specs across multiple parallel workers sharing one working directory: a
+  fixture doing `git checkout -b ...` mid-suite would switch branches out from under other
+  still-running workers reading the same files. Healing events are just logged during the run;
+  the git/patch work happens once, afterward, from a clean state.
+- Per your explicit choice this session, the healing-patch mechanism stops at a local commit on
+  `auto/healed-<timestamp>` — it never runs `git push` or `gh pr create` itself. Those are
+  printed as the next command for a human (or a future CI job) to run once they've reviewed the
+  diff.
+- `assertCleanAndTracked()` guard (see bugs above) is a deviation from the plain reading of
+  PLAN.md's "auto-patch the `.spec.ts` file and manifest" — added after this session's own demo
+  run exposed a real file-loss risk when the target files weren't already committed. This means
+  self-healing genuinely only works against already-committed specs, which matches how it'd
+  actually be used in CI anyway (you don't run CI against uncommitted files).
+- `HEALING_LOG_PATH` env var was added so the healing-event log location is overridable —
+  needed because this sandbox's real `test-results/` is root-owned from an earlier `docker
+  compose run --rm tests` (Phase 0) and isn't writable by the current user; see open question
+  below. Not purely a workaround — also lets CI redirect the log to a separate artifact
+  directory if useful later.
 
 ## Open questions for the human
-- Still no real app under test — all 3 example specs target playwright.dev (per your answer
-  this session, this is still the placeholder). Once/if a real app exists, Phase 1's example
-  tests should probably be replaced or supplemented with real ones.
-- Should the zenity-based recorder get Mac (`osascript`)/Windows equivalents, or is this
-  Linux-desktop-only team for now? Not built — no other OS available to test against here.
+- This sandbox's `test-results/` and `playwright-report/` directories are still root-owned
+  (`drwxr-xr-x root root`) from an earlier Docker run and this user account can't chown/delete
+  them without a sudo password. Native (`npm test`, not Docker) runs will keep hitting `EACCES`
+  writing reports/traces until you run `sudo chown -R $USER:$USER test-results
+  playwright-report` (or delete+let them regenerate) yourself.
+- Still no real app under test — all 4 example specs target playwright.dev. Once/if a real app
+  exists, these should probably be replaced or supplemented with real ones.
+- Should the 3 pre-existing Phase 1 tests be migrated to use `resilientLocator` too, or is one
+  dedicated demo test enough to prove the pipeline for now?
 
 ## Branch
-- `feature/locator-manifest` — ready to hand off for review.
+- `feature/deterministic-healing` — ready to hand off for review.
