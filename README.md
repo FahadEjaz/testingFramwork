@@ -6,13 +6,14 @@ philosophy and `PLAN.md` for the phased build order. `PROGRESS.md` tracks curren
 
 ## Repo layout
 
-- `tests/` — Playwright `.spec.ts` files, recorded via Codegen, structured as Page Objects
-  (see `tests/pages/`).
+- `tests/` — Playwright `.spec.ts` files, recorded via Codegen. Larger/reused flows are
+  structured as Page Objects (see `tests/pages/`); smaller ones may keep locators inline.
 - `manifests/` — one JSON file per spec, keyed by element name, each with a `primary` locator
   plus 2-3 `fallbacks`. Read only when a locator fails at runtime — never during a normal
   passing run.
-- `scripts/` — supporting tooling (e.g. manifest scaffolding, self-healing patch/PR logic),
-  added as later phases land.
+- `scripts/` — `record-test.js`/`record-test.sh` (point-and-click test recorder) and
+  `generate-manifest.js` (manifest scaffolding); self-healing patch/PR logic lands in a later
+  phase.
 - `.github/workflows/` — CI, running inside the same container image used locally.
 - `Dockerfile` / `docker-compose.yml` — pin the exact browser/OS environment so local and CI
   runs are identical.
@@ -44,16 +45,48 @@ browser), `npm run report` (open the last HTML report).
 
 ## Recording a test
 
-1. Run Codegen against the target app:
-   ```bash
-   npx playwright codegen <url>
-   ```
-2. Save the generated spec under `tests/`, refactoring interactions behind a Page Object in
-   `tests/pages/` rather than leaving raw locators inline in the test body.
-3. Add a companion manifest file under `manifests/<spec-name>.json` capturing 2-3 fallback
-   locator strategies per interactive element (role/test-id/CSS) — see `manifests/smoke.json`
-   for the current shape. This schema is provisional until Phase 1 finalizes it.
-4. Run the test locally (Docker or native, above) before committing.
+### Point-and-click (no terminal, no commands to type)
+
+1. Double-click `scripts/record-test.sh` (or open a file manager and run it — mark it
+   executable first if your OS doesn't preserve the `+x` bit on clone).
+2. A pop-up asks for the web address to record. Then a second pop-up asks for a short test
+   name (e.g. "login flow") — this becomes the file name.
+3. A real browser opens with Playwright's recorder panel attached. Click through the app the
+   way a user would; every click/type/check turns into test code automatically. Close the
+   browser when you're done.
+4. The recorded test is saved to `tests/<name>.spec.ts`, and a starter locator manifest is
+   scaffolded automatically to `manifests/<name>.json`.
+5. Hand the two files to a developer to review: the manifest's fallback locators are heuristic
+   placeholders marked `TODO` (this script can't guess real test-id/CSS values without a human
+   inspecting the DOM), and the recorded steps may be worth refactoring behind a Page Object
+   under `tests/pages/` for larger flows.
+
+This requires a Linux desktop with `zenity` installed (`sudo apt install zenity`) for the
+pop-up prompts.
+
+### Terminal (for developers)
+
+```bash
+npx playwright codegen <url> --output tests/<name>.spec.ts
+node scripts/generate-manifest.js tests/<name>.spec.ts
+```
+
+Refactoring interactions behind a Page Object in `tests/pages/` is recommended for larger/
+reused flows, but not required — `generate-manifest.js` scans both styles (raw inline locators
+or a Page Object's constructor). Run the test locally (Docker or native, above) before
+committing either way.
+
+## Locator manifests
+
+Each spec has a companion `manifests/<spec-name>.json` capturing 2-3 fallback locator
+strategies (role/test-id/CSS/text/label/placeholder) per interactive element. See
+`manifests/schema.json` for the full shape. The manifest is metadata only — it's read only
+when a locator fails at runtime (Phase 2+), never during a normal passing run.
+
+`scripts/generate-manifest.js <spec.ts> [--force]` scaffolds one by scanning the spec (and any
+Page Object it imports) for `page.getBy*()`/`page.locator()` calls. Its fallback suggestions
+are heuristic placeholders marked `TODO` — always review and fill in real values before relying
+on them for self-healing.
 
 ## Environment variables
 
@@ -64,4 +97,4 @@ browser), `npm run report` (open the last HTML report).
 
 ## Current status
 
-Phase 0 (project scaffolding) — see `PROGRESS.md` for details and next steps.
+Phase 1 (recording pipeline & locator manifest) — see `PROGRESS.md` for details and next steps.

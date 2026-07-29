@@ -1,0 +1,73 @@
+{
+  "spec": "tests/search-locators.spec.ts",
+  "elements": {
+    "searchControlK": {
+      "primary": {
+        "strategy": "role",
+        "role": "button",
+        "name": "Search (Control+k)"
+      },
+      "fallbacks": [
+        {
+          "strategy": "testId",
+          "value": "TODO-search-control-k"
+        },
+        {
+          "strategy": "css",
+          "value": "TODO: fill in a css value for searchControlK"
+        }
+      ]
+    },
+    "search": {
+      "primary": {
+        "strategy": "role",
+        "role": "searchbox",
+        "name": "Search"
+      },
+      "fallbacks": [
+        {
+          "strategy": "testId",
+          "value": "TODO-search"
+        },
+        {
+          "strategy": "css",
+          "value": "TODO: fill in a css value for search"
+        }
+      ]
+    },
+    "locators": {
+      "primary": {
+        "strategy": "role",
+        "role": "link",
+        "name": "Locators"
+      },
+      "fallbacks": [
+        {
+          "strategy": "testId",
+          "value": "TODO-locators"
+        },
+        {
+          "strategy": "css",
+          "value": "TODO: fill in a css value for locators"
+        }
+      ]
+    },
+    "locators2": {
+      "primary": {
+        "strategy": "role",
+        "role": "heading",
+        "name": "Locators"
+      },
+      "fallbacks": [
+        {
+          "strategy": "testId",
+          "value": "TODO-locators2"
+        },
+        {
+          "strategy": "css",
+          "value": "TODO: fill in a css value for locators2"
+        }
+      ]
+    }
+  }
+}

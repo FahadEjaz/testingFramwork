@@ -8,7 +8,9 @@
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
     "report": "playwright show-report",
-    "codegen": "playwright codegen"
+    "codegen": "playwright codegen",
+    "record": "node scripts/record-test.js",
+    "manifest:generate": "node scripts/generate-manifest.js"
   },
   "devDependencies": {
     "@playwright/test": "1.62.0",

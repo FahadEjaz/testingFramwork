@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://internal/testing-framework-v2/manifests/schema.json",
+  "title": "Locator manifest",
+  "description": "One file per .spec.ts, keyed by element name (matching the Page Object property name). Consulted only when a locator fails at runtime (Phase 2+) - never read during a normal passing run.",
+  "type": "object",
+  "required": ["spec", "elements"],
+  "additionalProperties": false,
+  "properties": {
+    "spec": {
+      "type": "string",
+      "description": "Path to the .spec.ts file this manifest belongs to, relative to repo root."
+    },
+    "elements": {
+      "type": "object",
+      "description": "Keyed by element name (Page Object property name).",
+      "additionalProperties": { "$ref": "#/$defs/element" }
+    }
+  },
+  "$defs": {
+    "element": {
+      "type": "object",
+      "required": ["primary", "fallbacks"],
+      "additionalProperties": false,
+      "properties": {
+        "primary": { "$ref": "#/$defs/locator" },
+        "fallbacks": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/locator" }
+        }
+      }
+    },
+    "locator": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["strategy", "role"],
+          "additionalProperties": false,
+          "properties": {
+            "strategy": { "const": "role" },
+            "role": { "type": "string", "description": "ARIA role, e.g. 'link', 'heading', 'button'." },
+            "name": { "type": "string", "description": "Accessible name, matches Playwright's getByRole(role, { name })." }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["strategy", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "strategy": { "enum": ["testId", "css", "text", "label", "placeholder"] },
+            "value": { "type": "string", "description": "Raw value passed to the corresponding Playwright locator method." }
+          }
+        }
+      ]
+    }
+  }
+}

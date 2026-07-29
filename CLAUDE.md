@@ -4,12 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Phase 0 (scaffolding) is in progress on `feature/scaffolding`. Playwright + TypeScript project,
-Docker/CI setup, and a trivial smoke test now exist (see "Commands" and "Architecture" below).
-Later phases (locator manifest schema, deterministic healing, AI healing, quality add-ons,
-hardening) have not started — don't assume anything from those phases exists until it's
-actually been built. Check `PROGRESS.md` first in any new session for exact current state
-before re-reading `REQUIREMENTS.md`/`PLAN.md` in full.
+Phase 0 (scaffolding) is merged into `main`. Phase 1 (recording pipeline & locator manifest) is
+in progress on `feature/locator-manifest`: the manifest schema is formalized
+(`manifests/schema.json`), `scripts/generate-manifest.js` scaffolds real manifests from either a
+Page Object or raw-inline locators, and a point-and-click recorder
+(`scripts/record-test.sh`/`record-test.js`, zenity-based) is the primary recording workflow —
+`npx playwright codegen` remains as a documented developer-facing alternative. Later phases
+(deterministic healing, AI healing, quality add-ons, hardening) have not started — don't assume
+anything from those phases exists until it's actually been built. Check `PROGRESS.md` first in
+any new session for exact current state before re-reading `REQUIREMENTS.md`/`PLAN.md` in full.
 
 Read these three files in full before doing any work on a new phase — they are the spec, not
 background reading:
@@ -35,14 +38,19 @@ npm run test:ui                # Playwright UI mode
 npm run test:headed            # headed browser
 npm run report                 # open last HTML report
 
-# Record a new test
-npx playwright codegen <url>
+# Record a new test — point-and-click (no CLI knowledge needed)
+scripts/record-test.sh          # double-click, or run directly; needs zenity
+
+# Record a new test — developer/CLI path
+npx playwright codegen <url> --output tests/<name>.spec.ts
+node scripts/generate-manifest.js tests/<name>.spec.ts
 ```
 
 There is no separate lint/typecheck script yet; `tsc` types are enforced implicitly by
-`ts-node`/Playwright's TS loader at test-run time. `BASE_URL` env var is unset by default — the
-Phase 0 smoke test targets an absolute URL directly since no real app under test is wired up
-yet.
+`ts-node`/Playwright's TS loader at test-run time. `BASE_URL` env var is unset by default — all
+example specs (`tests/smoke.spec.ts`, `tests/theme-toggle.spec.ts`,
+`tests/search-locators.spec.ts`) target playwright.dev directly since no real app under test is
+wired up yet.
 
 ## Core philosophy (from REQUIREMENTS.md — non-negotiable)
 
@@ -79,14 +87,26 @@ participant**:
 
 ## Architecture
 
-Existing (Phase 0):
+Existing (Phase 0 + Phase 1):
 
-- `tests/` — Playwright `.spec.ts` files, recorded via Codegen, structured as Page Objects
-  under `tests/pages/` (see `tests/pages/PlaywrightHomePage.ts` + `tests/smoke.spec.ts`).
-- `manifests/` — one JSON file per spec, keyed by element name, each with a `primary` locator
-  plus 2-3 `fallbacks` (role/test-id/CSS). Consulted only on locator failure; not yet wired
-  into any runtime logic (that's Phase 2). Schema in `manifests/smoke.json` is provisional
-  until Phase 1 formalizes it.
+- `tests/` — Playwright `.spec.ts` files. `tests/smoke.spec.ts` uses a Page Object
+  (`tests/pages/PlaywrightHomePage.ts`); `tests/theme-toggle.spec.ts` and
+  `tests/search-locators.spec.ts` use raw inline locators (no Page Object required — the
+  generator supports both styles). All three target playwright.dev.
+- `manifests/schema.json` — formal JSON Schema for the manifest shape: a locator entry is
+  `{ strategy: "role", role, name? }` or `{ strategy: "testId"|"css"|"text"|"label"|
+  "placeholder", value }`, 1:1 with Playwright's `getBy*`/`locator` methods. Each element needs
+  2-3 fallbacks. `manifests/<spec-name>.json` — one per spec, keyed by element name. Consulted
+  only on locator failure; not yet wired into any runtime logic (that's Phase 2).
+- `scripts/lib/extract-locators.js` — TypeScript-compiler-API-based scanner for
+  `page.getBy*()`/`page.locator()`/`this.page.getBy*()` calls.
+- `scripts/generate-manifest.js <spec.ts> [--force]` — scaffolds a manifest from a spec (+ any
+  Page Object it imports). Fallback locators it emits are `TODO`-marked placeholders, never
+  fabricated-looking guesses — no live DOM access on this path, so a human must fill in real
+  values before Phase 2+ relies on them.
+- `scripts/record-test.js` + `scripts/record-test.sh` — point-and-click recorder for
+  non-developers: zenity pop-ups for URL + test name, runs Codegen with `--output`, then
+  auto-runs `generate-manifest.js` on the result. Requires a Linux desktop with `zenity`.
 - `.github/workflows/tests.yml` — CI, running inside the same container image used locally,
   triggered on PRs + nightly cron. AI-healing cost/time separation in logs is deferred until
   Phase 3 introduces AI calls.
@@ -98,9 +118,8 @@ Existing (Phase 0):
 
 Not yet built (later phases per PLAN.md) — do not assume these exist:
 
-- `scripts/` — currently empty; will hold the manifest-scaffolding script (scans a `.spec.ts`
-  and heuristically suggests fallback locators) and the self-healing patch/PR mechanism.
-- Any locator-failure retry logic, self-healing, or AI escalation (Phases 2-3).
+- Any locator-failure retry logic, self-healing, or AI escalation (Phases 2-3) — including the
+  self-healing patch/PR mechanism in `scripts/`.
 - `@axe-core/playwright` accessibility checks and `toHaveScreenshot()` baselines (Phase 4).
 
 Self-healing pipeline, in order, per REQUIREMENTS.md 3.3:
