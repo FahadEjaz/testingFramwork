@@ -3,6 +3,7 @@
     "target": "ES2022",
     "module": "commonjs",
     "moduleResolution": "node",
+    "moduleDetection": "force",
     "lib": ["ES2022"],
     "strict": true,
     "esModuleInterop": true,
@@ -11,5 +12,5 @@
     "resolveJsonModule": true,
     "types": ["node", "@playwright/test"]
   },
-  "include": ["tests/**/*.ts", "scripts/**/*.ts", "playwright.config.ts"]
+  "include": ["tests/**/*.ts", "scripts/**/*.ts", "playwright.config.ts", "server/src/**/*.ts", "server/test/**/*.ts"]
 }

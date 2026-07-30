@@ -4,19 +4,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
+**Major pivot (see REQUIREMENTS.md/PLAN.md):** the product is moving from a CLI/git-based
+framework to a hosted React web app — record/run/manage tests and review self-healing fixes
+entirely from a browser, no CLI, no git, for a non-technical end user. This pivot is
+**planning/docs only so far — no code has been written for it.** Do not start implementing
+Phase 4+ (web backend/frontend/recording-session infra) until explicitly told to; the user
+asked for the planning docs first and will request code separately.
+
+Phases 0-2 (below) are the already-built CLI/git-based engine. They are being **kept and
+reused as internals**, not deleted — but two user-facing parts are already known to be
+superseded and will be replaced, not extended, once Phase 4+ starts:
+- Phase 1's zenity/local-desktop recorder (`scripts/record-test.sh`) assumed a real desktop on
+  the machine running the app; the actual target user is remote-browser-only. Phase 6 replaces
+  the recording UX with a server-side streamed browser. Phase 1's manifest schema and
+  `generate-manifest.js` extraction logic are expected to be reused.
+- Phase 2's git-branch/PR healing review (`scripts/apply-healing-patches.js`) is being replaced
+  by an in-app Pending Fixes approve/reject queue (Phase 8) — the target user has no git access
+  at all. Phase 2's fallback-resolver logic (`tests/support/resilient-locator.ts`) is expected
+  to be reused as-is or near-as-is; only where the healing event gets written changes.
+
 Phase 0 (scaffolding) and Phase 1 (recording pipeline & locator manifest) are merged into
-`main`. Phase 2 (deterministic self-healing) is in progress on
-`feature/deterministic-healing`: tests opt in to fallback healing by calling
-`resilientLocator(...)` (`tests/support/resilient-locator.ts`) instead of using a locator
-directly; on primary-locator failure it tries each manifest fallback in order (no AI), logs a
-`[SELF-HEALED]` line, and records the event to `test-results/healing-events.jsonl`.
-`scripts/apply-healing-patches.js` then patches the manifest + spec and commits the fix to a
-local `auto/healed-<timestamp>` branch (never pushed/PR'd automatically — that's a documented
-manual follow-up). `tests/self-healing-demo.spec.ts` is the worked example (deliberately broken
-primary locator). Later phases (AI healing, quality add-ons, hardening) have not started —
-don't assume anything from those phases exists until it's actually been built. Check
-`PROGRESS.md` first in any new session for exact current state before re-reading
-`REQUIREMENTS.md`/`PLAN.md` in full.
+`main`. Phase 2 (deterministic self-healing) was built this session on
+`feature/deterministic-healing` and is ready for review (not yet merged) — see PROGRESS.md.
+Check `PROGRESS.md` first in any new session for exact current state before re-reading
+`REQUIREMENTS.md`/`PLAN.md` in full — both were substantially rewritten for this pivot.
 
 Read these three files in full before doing any work on a new phase — they are the spec, not
 background reading:

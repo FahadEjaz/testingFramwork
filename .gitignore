@@ -6,3 +6,5 @@ playwright/.cache/
 .env
 .idea/
 .claude/
+server/data/
+.playwright-mcp/

@@ -114,6 +114,44 @@ clean on your current branch — patching an untracked file and then switching b
 make that file vanish from your working tree (it'd only exist on the new `auto/healed-*`
 branch). Commit your recorded test before relying on self-healing.
 
+## Backend API (Phase 4 — web platform pivot)
+
+`server/` is a thin Express/TypeScript API that wraps the existing engine so a client never
+needs file or git access — see `REQUIREMENTS.md`/`PLAN.md` for why. Runs directly with `node`;
+Node 24's native TypeScript support means no build step or `ts-node`/`tsx` dependency.
+
+```bash
+APP_USERNAME=admin APP_PASSWORD=change-me npm run server:start   # listens on :4000 (PORT to override)
+npm run test:server                                              # node:test integration suite
+```
+
+- Single shared HTTP Basic login (`APP_USERNAME`/`APP_PASSWORD` env vars — no defaults, the
+  server refuses to start without both).
+- `GET /api/health` — unauthenticated liveness check.
+- `GET/POST /api/tests`, `PATCH|DELETE /api/tests/:id` — test-case metadata (name + which
+  already-committed `.spec.ts` it points at; authoring the spec itself is Phase 6's job).
+- `POST /api/tests/:id/runs` — runs that spec via `npx playwright test --project=chromium
+  --reporter=json` and stores the structured result; `GET /api/tests/:id/runs` /
+  `GET /api/runs/:runId` read results back.
+- `GET /api/pending-fixes`, `PATCH /api/pending-fixes/:id` — the Pending Fixes storage
+  foundation for Phase 8's review queue; nothing populates it yet (Phase 2's healing pipeline
+  still logs to `healing-events.jsonl` until Phase 8 rewires it).
+- All storage is JSON files under `server/data/` (gitignored, created on first write;
+  override with `DATA_DIR` for tests/scratch runs).
+
+## Frontend (Phase 5 — web platform pivot)
+
+`web/` is a Vite + React + TypeScript app: login screen, test list, per-test run history, and
+the Pending Fixes review queue. "New Recording" is a placeholder screen until Phase 6 builds the
+streamed-browser recorder behind it.
+
+```bash
+cd web && npm install
+npm run dev   # :5173, proxies /api to the backend (API_PROXY_TARGET overrides the target)
+```
+
+Needs the backend running (`npm run server:start` from the repo root) to show real data.
+
 ## Environment variables
 
 - `BASE_URL` — base URL of the app under test. Unset in Phase 0 since the smoke test targets

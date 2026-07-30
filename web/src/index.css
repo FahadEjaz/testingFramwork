@@ -1,0 +1,104 @@
+/* Design tokens — see PROGRESS.md Phase 5 for the brief this was derived from: an internal
+   diagnostics console for QA people running/healing E2E tests, not a marketing page. Palette
+   avoids the cream+terracotta+serif and near-black+acid-green defaults; status colors borrow
+   the vocabulary of instrument signal lamps (passed/healed/failed) since that's the one thing
+   this app is fundamentally about. */
+:root {
+  --paper: #f3f5f2;
+  --paper-raised: #ffffff;
+  --ink: #1b1d22;
+  --slate: #5b6472;
+  --line: #dce1dc;
+
+  --signal-blue: #2452d9;
+  --signal-blue-bg: rgba(36, 82, 217, 0.08);
+  --pass-teal: #1f8a70;
+  --pass-teal-bg: rgba(31, 138, 112, 0.12);
+  --healed-amber: #b06a1f;
+  --healed-amber-bg: rgba(199, 125, 46, 0.14);
+  --fail-crimson: #b23a48;
+  --fail-crimson-bg: rgba(178, 58, 72, 0.12);
+
+  --display: 'Space Grotesk', system-ui, sans-serif;
+  --body: 'Inter', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+
+  color-scheme: light;
+  color: var(--ink);
+  background: var(--paper);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--ink);
+}
+
+h1 {
+  font-size: 22px;
+}
+h2 {
+  font-size: 17px;
+}
+h3 {
+  font-size: 14px;
+  color: var(--slate);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--signal-blue);
+}
+
+code,
+.mono {
+  font-family: var(--mono);
+}
+
+button {
+  font-family: var(--body);
+}
+
+:focus-visible {
+  outline: 2px solid var(--signal-blue);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

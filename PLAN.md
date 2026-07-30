@@ -1,13 +1,14 @@
-# Development Plan — AI-Assisted Testing Framework
+# Development Plan — AI-Assisted Web Testing Platform
 
-Reference: see `REQUIREMENTS.md` for scope and non-negotiables. This plan intentionally
-groups work into a small number of larger phases rather than many small tickets, so
-development doesn't stall on process overhead.
+Reference: see `REQUIREMENTS.md` for scope and non-negotiables. Phases 0-2 below are already
+built (CLI/git-based engine — see `PROGRESS.md`). Phases 4+ are the web-platform pivot: planning
+only right now, **no code**, per explicit instruction — wait for the go-ahead before starting
+Phase 4.
 
 ## Workflow (applies to every phase below)
 
 1. Before starting a phase, create a feature branch from the base branch:
-   `feature/<phase-slug>` (e.g. `feature/locator-manifest`).
+   `feature/<phase-slug>` (e.g. `feature/webapp-backend`).
 2. Do all work for that phase on the branch. Do not touch the base branch directly.
 3. Do not merge or commit to base. When the phase is complete, stop and hand it back for
    review.
@@ -18,117 +19,174 @@ development doesn't stall on process overhead.
 6. Start the next phase from the (now-updated) base branch, not from the previous feature
    branch.
 
-## Phase 0 — Project scaffolding
+## Phase 0 — Project scaffolding *(done)*
 
-**Branch:** `feature/scaffolding`
+**Branch:** `feature/scaffolding` (merged)
 
-- Initialize the repo: Playwright + TypeScript config, folder structure
-  (`tests/`, `manifests/`, `scripts/`, `.github/workflows/`).
-- Base Playwright config (browsers, timeouts, reporter settings).
-- `Dockerfile` based on the official `mcr.microsoft.com/playwright` image, with the project
-  installed on top so browsers/OS are pinned and identical locally and in CI.
-- `docker-compose.yml` (or equivalent) for local dev parity — `docker compose run tests`
-  should run the exact same thing CI runs.
-- CI workflow updated to run inside the same image (via `container:` in GitHub Actions, or
-  by building/running the Dockerfile directly) instead of installing Node/browsers on the
-  bare runner.
-- `README.md` explaining the repo layout, how to record a test, and how to run the suite
-  both via Docker and (optionally) natively for quick local iteration.
-- Create `PROGRESS.md` from the template below.
+Playwright + TypeScript project, Docker/CI parity, folder structure, trivial smoke test. See
+`PROGRESS.md` for what actually landed.
 
-**Done when:** a trivial recorded test runs green in CI inside the container, and a
-developer can run the identical test locally with a single `docker compose` command and no
-other manual setup.
+## Phase 1 — Recording pipeline & locator manifest *(done — CLI-based recording superseded, see note)*
 
-## Phase 1 — Recording pipeline & locator manifest
+**Branch:** `feature/locator-manifest` (merged)
 
-**Branch:** `feature/locator-manifest`
+Formalized the locator manifest schema (`manifests/schema.json`), built
+`scripts/generate-manifest.js` (scans a `.spec.ts`/Page Object for locators and scaffolds a
+starter manifest with `TODO`-marked fallbacks), and a point-and-click zenity-based recorder
+(`scripts/record-test.sh`) as an interim non-CLI recording path.
 
-- Document the Codegen recording workflow (how to record, where files land, naming
-  convention).
-- Define the locator manifest JSON schema (one file per spec, keyed by element name, with
-  `primary` + `fallbacks`).
-- Build a small script that scans a `.spec.ts` file and generates a starter manifest
-  (heuristic-based fallback suggestions — role/test-id/CSS), for the human to review and
-  adjust rather than trust blindly.
-- Record 2–3 real example tests end-to-end to validate the shape of the manifest against
-  real locators.
+> **Superseded by this pivot:** the zenity/local-desktop recorder assumed the user has a real
+> desktop on the machine running the app. The actual target user is remote-browser-only with no
+> local install — Phase 6 replaces the *recording UX* with a server-side streamed browser. The
+> manifest schema and `generate-manifest.js`'s locator-extraction logic remain useful internals
+> and are expected to be reused, not thrown away.
 
-**Done when:** at least one real recorded test has a working manifest file next to it, and
-the schema is stable enough that later phases can rely on it.
+## Phase 2 — Deterministic self-healing engine *(done — git-PR output superseded, see note)*
 
-## Phase 2 — Deterministic self-healing (no AI yet)
+**Branch:** `feature/deterministic-healing` (built this session; hand off for review)
 
-**Branch:** `feature/deterministic-healing`
+Built the failure-handling hook (`tests/support/resilient-locator.ts`): on locator failure, try
+each manifest fallback in order before failing the test for real, no AI. Built
+`scripts/apply-healing-patches.js`, which patches the manifest + spec and commits the fix to a
+local `auto/healed-<timestamp>` git branch (never pushed/PR'd automatically).
 
-- Build the failure-handling hook: when a test fails on a locator, look up the manifest and
-  retry with each fallback in order before failing the test for real.
-- If a fallback succeeds, patch the `.spec.ts` file and manifest automatically, and commit
-  the change to a dedicated branch (e.g. `auto/healed-<timestamp>`) rather than the running
-  feature branch — opened as its own PR for review.
-- Add clear CI logging so a fallback-healed run is visibly distinguishable from a normal
-  pass or a hard failure.
-- Intentionally break a locator in a test example to prove the fallback chain works
-  end-to-end.
+> **Superseded by this pivot:** REQUIREMENTS.md's non-negotiable review mechanism is now an
+> in-app Pending Fixes queue, not a git branch/PR (the target user has no git access at all).
+> Phase 8 replaces `apply-healing-patches.js`'s git-branch mechanism with writing to the app's
+> storage instead. The core "try fallbacks in order, no AI" resolver logic in
+> `resilient-locator.ts` is retained and expected to be reused as-is or near-as-is.
 
-**Done when:** a deliberately broken locator is healed via fallback with no AI call involved,
-and the fix appears as a reviewable PR.
+---
 
-## Phase 3 — AI healing escalation
+## Phase 3 *(reserved — see Phase 9)*
+
+Originally "AI healing escalation" in the pre-pivot plan. Renumbered to Phase 9 below so it can
+build on the in-app Pending Fixes queue (Phase 8) instead of the git-PR mechanism it was
+originally scoped against.
+
+---
+
+## Phase 4 — Backend API & storage foundation
+
+**Branch:** `feature/webapp-backend`
+
+- Stand up a backend service (e.g. Node/Express) that wraps the existing engine: endpoints to
+  list/create/rename/delete test cases, trigger a run, fetch run results, fetch/update Pending
+  Fixes.
+- Decide and implement the storage layer the API owns (still plain files on disk managed
+  entirely by the service, vs. a lightweight database) — the end user never touches these
+  directly either way.
+- Single shared login (basic auth or simple session-based login) — no per-tenant accounts.
+
+**Done when:** an authenticated API client can list tests, trigger a run, and read back
+structured results, with no direct file or git access required.
+
+## Phase 5 — React frontend shell
+
+**Branch:** `feature/webapp-frontend`
+
+- Login screen, test list view, "New Recording" entry point, per-test detail/history view,
+  Pending Fixes review screen.
+- Can be built against mocked/static data if Phase 4's API isn't fully ready yet; wire up to the
+  real API once both exist.
+
+**Done when:** a user can log in and navigate to every major screen (record / run / report /
+pending fixes), even if some are still showing placeholder data.
+
+## Phase 6 — Recording session infrastructure
+
+**Branch:** `feature/recording-session`
+
+- Server-side, per-session Playwright browser (headed) launched on demand; a screencast/
+  remote-control bridge (e.g. CDP screencast + input injection over a websocket) so the user's
+  own browser shows and controls it live — no extension, no local install.
+- Session lifecycle: start, idle timeout, concurrent-session limits, cleanup on disconnect.
+- On stop, translate captured actions into a test + companion manifest (reusing Phase 1's
+  extraction/generation logic where possible), save via Phase 4's API.
+
+**Done when:** a user can enter a URL in the React app, interact with a live streamed browser,
+stop, and see a generated test saved and listed — zero CLI, zero git, zero local install.
+
+## Phase 7 — One-click execution & reporting
+
+**Branch:** `feature/webapp-execution`
+
+- "Run" button per test (or a whole suite) triggers the existing Playwright execution engine
+  server-side; results (pass/fail/healed/screenshots/trace) surfaced in the React app.
+- Scheduled/nightly full-suite runs via the same engine, independent of user-triggered runs.
+
+**Done when:** a user can click Run and see a report in-browser, matching what the existing
+HTML reporter already captures, with no CLI/file access needed.
+
+## Phase 8 — In-app healing review queue *(replaces Phase 2's git-PR flow)*
+
+**Branch:** `feature/inapp-healing-review`
+
+- Deterministic fallback-healing during a run (Phase 2's resolver logic, reused) writes to the
+  app's Pending Fixes storage instead of committing to a git branch.
+- React "Pending Fixes" screen: before/after locator, which test/element, deterministic vs
+  AI-sourced, Approve/Reject actions. Approving updates the test's live manifest for future
+  runs; rejecting discards it.
+- Retire `scripts/apply-healing-patches.js`'s git-branch mechanism from the end-user product
+  once this ships (may keep it as an internal/dev-only tool — decide at the time).
+
+**Done when:** a healed locator from a real run appears in Pending Fixes and clicking Approve
+changes what the next run uses as primary — zero git operations involved anywhere in the flow.
+
+## Phase 9 — AI healing escalation *(was Phase 3 pre-pivot)*
 
 **Branch:** `feature/ai-healing`
 
-- Only triggered when Phase 2's fallback chain is exhausted and still fails.
-- Build the scoped-context extractor: given a failed locator, pull the minimal relevant DOM
-  subtree (not the full page) for the prompt.
-- Integrate the AI call (Claude Haiku or equivalent low-cost model) with a fixed, narrow
-  prompt: old locator + DOM snippet + "return one updated locator, nothing else."
-- Apply the same patch-and-PR mechanism as Phase 2's fallback healing — same branch
-  convention, same "never auto-merge" rule.
-- Add a cost/usage log line per AI call (tokens used, which test, which locator) so spend is
-  visible over time.
+- Only triggered when Phase 2/8's fallback chain is exhausted and still fails.
+- Scoped-context extractor: given a failed locator, pull the minimal relevant DOM subtree (not
+  the full page) for the prompt.
+- Single AI call (Claude Haiku or equivalent low-cost model): old locator + DOM snippet →
+  "return one updated locator, nothing else."
+- Surfaces into Phase 8's Pending Fixes queue, marked "AI-healed"; same Approve/Reject flow.
+- Log token usage per call (test, locator, tokens) so spend is visible.
 
-**Done when:** a locator broken badly enough that no fallback works gets correctly healed by
-a single scoped AI call, and the resulting patch is a reviewable PR with visible token usage
-logged.
+**Done when:** a locator broken badly enough that no fallback works gets healed by a single
+scoped AI call, appears in Pending Fixes marked AI-healed, with token cost visible — still no
+auto-apply without a human clicking Approve.
 
-## Phase 4 — Quality add-ons
+## Phase 10 — Quality add-ons *(was Phase 4 pre-pivot)*
 
 **Branch:** `feature/quality-checks`
 
-- Add `@axe-core/playwright` accessibility checks to the base test fixture.
-- Add Playwright's native `toHaveScreenshot()` baseline screenshots for key pages, with the
-  update workflow documented (how to intentionally accept a new baseline).
-- Confirm the HTML reporter output is useful as-is; note (don't implement) where something
-  like Allure might matter later if volume grows.
+- `@axe-core/playwright` accessibility checks on the base test fixture.
+- Playwright's native `toHaveScreenshot()` baselines for key pages, update workflow documented.
+- Both surfaced in the app's report view (Phase 7) alongside functional results.
 
-**Done when:** accessibility violations and visual diffs show up clearly in the same CI run
-as functional tests, with no AI involvement.
+**Done when:** accessibility violations and visual diffs show up in the app's report for a run,
+with no AI involvement.
 
-## Phase 5 — Hardening & handoff docs
+## Phase 11 — Hardening & handoff docs *(was Phase 5 pre-pivot)*
 
 **Branch:** `feature/hardening`
 
 - Review everything sent to the AI model across the project for accidental secrets/PII
-  exposure.
-- Write a short "how this framework works" doc for a new team member (ties Requirements +
-  this Plan + the actual repo structure together in one page).
-- Confirm the token/cost logging from Phase 3 is aggregated somewhere readable (even just a
-  markdown table updated by CI).
+  exposure — including the recording session's streamed browser view.
+- Write a "how this platform works" doc for a new team member (record → run → report → pending
+  fixes → optional AI escalation), covering both the non-technical end-user flow and whoever
+  maintains the underlying engine.
+- Confirm token/cost logging from Phase 9 is aggregated somewhere readable in the app.
 
-**Done when:** someone unfamiliar with the project could read one doc and understand the
-whole self-healing flow without reading the code first.
+**Done when:** someone unfamiliar with the project could read one doc and understand the whole
+platform without reading the code first.
 
 ## Future / deferred (not part of this plan)
 
 Tracked here so they aren't forgotten, not because they're scheduled:
+- Multi-tenant accounts/orgs/billing.
 - Drag-and-drop visual test builder.
 - Full MCP-driven exploratory testing runs.
 - Allure / Percy / BuildPulse / Testcontainers / Pact, if and when scale justifies them.
+- Git-based PR review of healed fixes — deliberately removed by this pivot (Section 5 of
+  REQUIREMENTS.md), not just deferred; would need a fresh decision to bring back.
 
 ---
 
-## PROGRESS.md template (create this file in Phase 0)
+## PROGRESS.md template (unchanged)
 
 ```markdown
 # Progress Log
@@ -137,7 +195,7 @@ Tracked here so they aren't forgotten, not because they're scheduled:
 > A new session should be able to read this file alone and know exactly where things stand.
 
 ## Current phase
-<!-- e.g. Phase 2 — Deterministic self-healing -->
+<!-- e.g. Phase 6 — Recording session infrastructure -->
 
 ## Status
 <!-- In progress / Blocked / Ready for review -->

@@ -1,0 +1,96 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper-raised);
+  padding: 16px 18px;
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.cardTitle {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cardSpec {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--slate);
+  margin-bottom: 12px;
+}
+
+.diff {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--paper);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+
+.diffOld {
+  color: var(--fail-crimson);
+}
+
+.diffNew {
+  color: var(--pass-teal);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.reject {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--slate);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.reject:hover {
+  color: var(--fail-crimson);
+  border-color: var(--fail-crimson);
+}
+
+.approve {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--pass-teal);
+  border: none;
+  border-radius: 6px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.empty {
+  padding: 40px 18px;
+  text-align: center;
+  color: var(--slate);
+  font-size: 13.5px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper-raised);
+  margin-top: 20px;
+}

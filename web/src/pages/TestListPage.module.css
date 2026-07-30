@@ -1,0 +1,85 @@
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.newButton {
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--signal-blue);
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  text-decoration: none;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--paper-raised);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  text-decoration: none;
+  color: inherit;
+  border-bottom: 1px solid var(--line);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.row:hover {
+  background: var(--paper);
+}
+
+.rowMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.rowName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.rowSpec {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--slate);
+  margin-top: 2px;
+}
+
+.rowLamp {
+  flex: none;
+  width: 90px;
+}
+
+.rowChevron {
+  flex: none;
+  color: var(--slate);
+}
+
+.empty {
+  padding: 40px 18px;
+  text-align: center;
+  color: var(--slate);
+  font-size: 13.5px;
+}
+
+.error {
+  color: var(--fail-crimson);
+  font-size: 13.5px;
+}

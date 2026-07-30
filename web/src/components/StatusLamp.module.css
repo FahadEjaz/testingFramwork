@@ -1,0 +1,64 @@
+.lamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.pass {
+  color: var(--pass-teal);
+}
+.pass .dot {
+  background: var(--pass-teal);
+  box-shadow: 0 0 0 3px var(--pass-teal-bg);
+}
+
+.fail {
+  color: var(--fail-crimson);
+}
+.fail .dot {
+  background: var(--fail-crimson);
+  box-shadow: 0 0 0 3px var(--fail-crimson-bg);
+}
+
+.healed {
+  color: var(--healed-amber);
+}
+.healed .dot {
+  background: var(--healed-amber);
+  box-shadow: 0 0 0 3px var(--healed-amber-bg);
+}
+
+.pending {
+  color: var(--slate);
+}
+.pending .dot {
+  background: var(--slate);
+  box-shadow: 0 0 0 3px rgba(91, 100, 114, 0.12);
+}
+
+.approved {
+  color: var(--pass-teal);
+}
+.approved .dot {
+  background: var(--pass-teal);
+  box-shadow: 0 0 0 3px var(--pass-teal-bg);
+}
+
+.rejected {
+  color: var(--fail-crimson);
+}
+.rejected .dot {
+  background: var(--fail-crimson);
+  box-shadow: 0 0 0 3px var(--fail-crimson-bg);
+}
