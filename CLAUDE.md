@@ -40,10 +40,7 @@ background reading:
 ## Commands
 
 ```bash
-# Run the suite via Docker (matches CI exactly — preferred)
-docker compose run --rm tests
-
-# Native local run (faster iteration; requires local browsers)
+# Run the suite (same command locally and in CI)
 npm install
 npx playwright install --with-deps
 npm test                       # all projects (chromium/firefox/webkit)
@@ -137,12 +134,10 @@ Existing (Phase 0 + Phase 1 + Phase 2):
   to a local `auto/healed-<timestamp>` branch and switches back — never pushes, never opens a
   PR. Refuses to run if the target spec/manifest aren't already committed and clean (patching
   an untracked file and switching branches would make it vanish from the working tree).
-- `.github/workflows/tests.yml` — CI, running inside the same container image used locally,
+- `.github/workflows/tests.yml` — CI, installing Playwright's browsers fresh on the GitHub
+  Actions runner (no Docker — `npx playwright install --with-deps`, same command as local),
   triggered on PRs + nightly cron. AI-healing cost/time separation in logs is deferred until
   Phase 3 introduces AI calls.
-- `Dockerfile` / `docker-compose.yml` — based on `mcr.microsoft.com/playwright`, pinned to the
-  exact version installed in `package.json` (keep these two in lockstep when bumping
-  Playwright). `docker compose run --rm tests` locally runs the same image/command as CI.
 - `playwright.config.ts` — three browser projects (chromium/firefox/webkit), HTML + list
   reporters, `BASE_URL` read from env (unset for now).
 

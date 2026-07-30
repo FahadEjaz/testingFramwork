@@ -23,8 +23,8 @@ Phase 4.
 
 **Branch:** `feature/scaffolding` (merged)
 
-Playwright + TypeScript project, Docker/CI parity, folder structure, trivial smoke test. See
-`PROGRESS.md` for what actually landed.
+Playwright + TypeScript project, native local/CI parity, folder structure, trivial smoke test.
+See `PROGRESS.md` for what actually landed.
 
 ## Phase 1 — Recording pipeline & locator manifest *(done — CLI-based recording superseded, see note)*
 

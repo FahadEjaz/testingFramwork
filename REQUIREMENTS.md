@@ -115,9 +115,12 @@ operate and extend; approachable enough for a non-technical QA/product user to d
 - **Security:** no secrets/credentials/PII are ever sent to the AI model. The recording
   session's streamed browser view must not leak the operator's own credentials/session into
   anything persisted or sent to a model.
-- **Consistent execution environment:** test *execution* (scheduled/one-click runs) still runs
-  inside the pinned `mcr.microsoft.com/playwright` container image. The *recording session's*
-  browser may run in the same or an adjacent container — exact infra decided in Phase 6.
+- **Consistent execution environment:** test *execution* (scheduled/one-click runs) and the
+  *recording session's* browser both run against the exact `@playwright/test` version pinned in
+  `package.json`, with browsers installed fresh via `npx playwright install --with-deps` — the
+  same command locally, in CI, and on whatever host runs the backend. No Docker/container
+  pinning as of this pivot (removed — see PROGRESS.md); consistency comes from the pinned npm
+  version instead.
 
 ## 5. Explicitly out of scope (for now)
 

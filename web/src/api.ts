@@ -2,7 +2,7 @@
 // credentials; a 401 means they're stale/wrong, which the caller surfaces by logging out.
 import type { Credentials } from './auth/credentials';
 import { authHeader } from './auth/credentials';
-import type { PendingFix, PendingFixStatus, Run, TestCase } from './types';
+import type { PendingFix, PendingFixStatus, RecordedAction, Run, TestCase } from './types';
 
 export class ApiError extends Error {
   status: number;
@@ -74,5 +74,20 @@ export function updatePendingFix(
   return request<PendingFix>(credentials, `/api/pending-fixes/${id}`, {
     method: 'PATCH',
     body: JSON.stringify({ status }),
+  });
+}
+
+export function startRecording(credentials: Credentials, url: string): Promise<{ sessionId: string; wsPath: string }> {
+  return request(credentials, '/api/recordings', { method: 'POST', body: JSON.stringify({ url }) });
+}
+
+export function stopRecording(credentials: Credentials, sessionId: string): Promise<{ actions: RecordedAction[] }> {
+  return request(credentials, `/api/recordings/${sessionId}/stop`, { method: 'POST' });
+}
+
+export function saveRecording(credentials: Credentials, sessionId: string, name: string): Promise<TestCase> {
+  return request<TestCase>(credentials, `/api/recordings/${sessionId}/save`, {
+    method: 'POST',
+    body: JSON.stringify({ name }),
   });
 }

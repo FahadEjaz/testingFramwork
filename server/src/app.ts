@@ -11,14 +11,22 @@ const { createRunsStore } = require('./storage/runsStore.ts');
 const { createPendingFixesStore } = require('./storage/pendingFixesStore.ts');
 const { createTestsRouter } = require('./routes/tests.ts');
 const { createPendingFixesRouter } = require('./routes/pendingFixes.ts');
+const { createRecordingsRouter } = require('./routes/recordings.ts');
+const { SessionManager } = require('./recording/sessionManager.ts');
 
 export interface CreateAppOptions {
   repoRoot: string;
   dataDir: string;
   credentials: Credentials;
+  sessionManager?: unknown;
 }
 
-function createApp({ repoRoot, dataDir, credentials }: CreateAppOptions): Application {
+export interface CreatedApp {
+  app: Application;
+  sessionManager: unknown;
+}
+
+function createApp({ repoRoot, dataDir, credentials, sessionManager }: CreateAppOptions): CreatedApp {
   const app = express();
   app.use(express.json());
 
@@ -30,11 +38,13 @@ function createApp({ repoRoot, dataDir, credentials }: CreateAppOptions): Applic
   const testsStore = createTestsStore(dataDir);
   const runsStore = createRunsStore(dataDir);
   const pendingFixesStore = createPendingFixesStore(dataDir);
+  const recordingSessionManager = sessionManager ?? new SessionManager();
 
   app.use('/api', createTestsRouter({ repoRoot, testsStore, runsStore }));
   app.use('/api', createPendingFixesRouter({ pendingFixesStore }));
+  app.use('/api', createRecordingsRouter({ repoRoot, testsStore, sessionManager: recordingSessionManager }));
 
-  return app;
+  return { app, sessionManager: recordingSessionManager };
 }
 
 module.exports = { createApp };

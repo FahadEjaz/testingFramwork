@@ -16,23 +16,10 @@ philosophy and `PLAN.md` for the phased build order. `PROGRESS.md` tracks curren
   healed locator fix to its own branch after a test run); AI escalation lands in Phase 3.
 - `tests/support/resilient-locator.ts` — the locator wrapper tests call to get deterministic
   fallback healing (see "Self-healing" below).
-- `.github/workflows/` — CI, running inside the same container image used locally.
-- `Dockerfile` / `docker-compose.yml` — pin the exact browser/OS environment so local and CI
-  runs are identical.
+- `.github/workflows/` — CI, installing Playwright's browsers fresh on the runner (same
+  `@playwright/test` version pinned in `package.json` as everywhere else).
 
 ## Running the suite
-
-### Via Docker (recommended — matches CI exactly)
-
-```bash
-docker compose run --rm tests
-```
-
-This builds the image from `Dockerfile` (based on
-`mcr.microsoft.com/playwright:v1.62.0-jammy`) and runs `npx playwright test` inside it. Reports
-land in `./playwright-report` and `./test-results` on the host via bind mounts.
-
-### Natively (faster local iteration)
 
 Requires Node.js and the Playwright browsers installed locally:
 
@@ -75,8 +62,7 @@ node scripts/generate-manifest.js tests/<name>.spec.ts
 
 Refactoring interactions behind a Page Object in `tests/pages/` is recommended for larger/
 reused flows, but not required — `generate-manifest.js` scans both styles (raw inline locators
-or a Page Object's constructor). Run the test locally (Docker or native, above) before
-committing either way.
+or a Page Object's constructor). Run the test locally (above) before committing either way.
 
 ## Locator manifests
 

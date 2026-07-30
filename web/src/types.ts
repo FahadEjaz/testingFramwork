@@ -54,3 +54,17 @@ export interface PendingFix {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface LocatorCandidate {
+  strategy: 'role' | 'testId' | 'css' | 'text' | 'label' | 'placeholder';
+  role?: string;
+  name?: string;
+  value?: string;
+}
+
+export interface RecordedAction {
+  type: 'click' | 'fill' | 'selectOption';
+  url: string;
+  candidates: LocatorCandidate[];
+  value?: string;
+}
