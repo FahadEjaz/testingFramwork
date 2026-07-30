@@ -88,7 +88,7 @@ export function TestDetailPage() {
       <div className={styles.history}>
         {runs && runs.length === 0 && <div className={styles.empty}>No runs yet — click Run to try this test.</div>}
         {runs?.map((run) => (
-          <div className={styles.historyRow} key={run.id}>
+          <Link className={styles.historyRow} key={run.id} to={`/tests/${id}/runs/${run.id}`}>
             <div className={styles.historyLamp}>
               <StatusLamp {...runLamp(run)} />
             </div>
@@ -97,7 +97,7 @@ export function TestDetailPage() {
               {run.stats.expected} passed · {run.stats.unexpected} failed
               {run.healed ? ` · ${run.healingEvents.length} locator(s) self-healed` : ''}
             </div>
-          </div>
+          </Link>
         ))}
       </div>
     </div>

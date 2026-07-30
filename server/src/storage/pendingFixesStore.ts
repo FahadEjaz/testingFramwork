@@ -1,7 +1,8 @@
-// File-backed store for the Pending Fixes queue (Phase 4 foundation for Phase 8's review UI —
-// see PLAN.md / REQUIREMENTS.md 3.3). Nothing writes to this yet: Phase 2's healing pipeline
-// still logs to healing-events.jsonl, and wiring that into this store instead is Phase 8's job.
-// `add` exists so Phase 8 (and this store's own tests) has something to call.
+// File-backed store for the Pending Fixes queue (Phase 4 storage foundation; Phase 8 wires
+// Phase 2's fallback-healing pipeline into it and adds the manifest/spec-patching side of
+// Approve — see PLAN.md / REQUIREMENTS.md 3.3).
+import type { HealingEvent } from './runsStore';
+
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -16,6 +17,10 @@ export interface PendingFix {
   elementKey: string;
   oldPrimary: unknown;
   newPrimary: unknown;
+  // Index into the manifest entry's `fallbacks` array that `newPrimary` came from — needed to
+  // remove it from `fallbacks` (rather than duplicate it there) when Approve promotes it to
+  // `primary`. Mirrors scripts/apply-healing-patches.js's HealingEvent-driven patch logic.
+  fallbackIndex: number;
   source: PendingFixSource;
   status: PendingFixStatus;
   createdAt: string;
@@ -27,6 +32,10 @@ export interface PendingFixesStore {
   get(id: string): PendingFix | undefined;
   add(fix: Omit<PendingFix, 'id' | 'status' | 'createdAt' | 'updatedAt'>): PendingFix;
   update(id: string, status: PendingFixStatus): PendingFix | undefined;
+  // Queues one pending fix per healing event from a run, skipping any element that already has
+  // an undecided pending fix queued (so a test that keeps healing the same element run after run
+  // before anyone reviews it doesn't spam duplicates). Returns only the newly-created fixes.
+  recordHealing(testId: string, events: HealingEvent[], source: PendingFixSource): PendingFix[];
 }
 
 function createPendingFixesStore(dataDir: string): PendingFixesStore {
@@ -70,7 +79,39 @@ function createPendingFixesStore(dataDir: string): PendingFixesStore {
     return fix;
   }
 
-  return { list, get, add, update };
+  function recordHealing(testId: string, events: HealingEvent[], source: PendingFixSource): PendingFix[] {
+    const fixes = readAll();
+    const now = new Date().toISOString();
+    const created: PendingFix[] = [];
+
+    for (const event of events) {
+      const alreadyQueued = fixes.some(
+        (f) => f.status === 'pending' && f.testId === testId && f.spec === event.spec && f.elementKey === event.elementKey
+      );
+      if (alreadyQueued) continue;
+
+      const fix: PendingFix = {
+        id: crypto.randomUUID(),
+        testId,
+        spec: event.spec,
+        elementKey: event.elementKey,
+        oldPrimary: event.oldPrimary,
+        newPrimary: event.newPrimary,
+        fallbackIndex: event.fallbackIndex,
+        source,
+        status: 'pending',
+        createdAt: now,
+        updatedAt: now,
+      };
+      fixes.push(fix);
+      created.push(fix);
+    }
+
+    if (created.length > 0) writeAll(fixes);
+    return created;
+  }
+
+  return { list, get, add, update, recordHealing };
 }
 
 module.exports = { createPendingFixesStore };

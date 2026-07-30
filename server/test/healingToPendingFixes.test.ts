@@ -1,0 +1,113 @@
+// Integration test for the Phase 8 write path: a run whose outcome carries healing events must
+// queue a matching Pending Fix, end to end through POST /tests/:id/runs — not just via the
+// pendingFixesStore unit tests. Uses createApp's injectable `runSpec` (added this phase) so this
+// stays fast/deterministic instead of needing a real Playwright process to actually self-heal.
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { createApp } = require('../src/app.ts');
+
+const repoRoot = path.resolve(__dirname, '..', '..');
+const credentials = { username: 'tester', password: 'secret' };
+const authHeader = `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')}`;
+const jsonHeaders = { Authorization: authHeader, 'Content-Type': 'application/json' };
+
+const healingEvent = {
+  spec: 'tests/smoke.spec.ts',
+  elementKey: 'submit',
+  oldPrimary: { strategy: 'css', value: '.old' },
+  newPrimary: { strategy: 'role', role: 'button', name: 'Submit' },
+  fallbackIndex: 0,
+  timestamp: new Date().toISOString(),
+};
+
+function fakeRunSpec(healingEvents: any[]) {
+  return async () => ({
+    status: 'passed',
+    stats: { expected: 1, unexpected: 0, flaky: 0, skipped: 0, duration: 10 },
+    healed: healingEvents.length > 0,
+    healingEvents,
+    reportAvailable: false,
+  });
+}
+
+function withServer(runSpec: unknown, fn: (ctx: { baseUrl: string }) => Promise<void>) {
+  return async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'phase8-healing-test-'));
+    const { app } = createApp({ repoRoot, dataDir, credentials, runSpec });
+    const server = app.listen(0);
+    await new Promise((resolve) => server.once('listening', resolve));
+    const port = (server.address() as { port: number }).port;
+    try {
+      await fn({ baseUrl: `http://127.0.0.1:${port}` });
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+  };
+}
+
+test(
+  'a run with healing events queues a matching Pending Fix',
+  withServer(fakeRunSpec([healingEvent]), async ({ baseUrl }) => {
+    const created: any = await (
+      await fetch(`${baseUrl}/api/tests`, {
+        method: 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify({ name: 'Smoke', specPath: 'tests/smoke.spec.ts' }),
+      })
+    ).json();
+
+    const runRes = await fetch(`${baseUrl}/api/tests/${created.id}/runs`, { method: 'POST', headers: jsonHeaders });
+    assert.equal(runRes.status, 201);
+    const run: any = await runRes.json();
+    assert.equal(run.healed, true);
+
+    const fixes: any = await (await fetch(`${baseUrl}/api/pending-fixes`, { headers: jsonHeaders })).json();
+    assert.equal(fixes.length, 1);
+    assert.equal(fixes[0].testId, created.id);
+    assert.equal(fixes[0].elementKey, 'submit');
+    assert.equal(fixes[0].source, 'fallback');
+    assert.equal(fixes[0].status, 'pending');
+    assert.deepEqual(fixes[0].newPrimary, healingEvent.newPrimary);
+  })
+);
+
+test(
+  'a second healing run on the same element does not duplicate the pending fix',
+  withServer(fakeRunSpec([healingEvent]), async ({ baseUrl }) => {
+    const created: any = await (
+      await fetch(`${baseUrl}/api/tests`, {
+        method: 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify({ name: 'Smoke', specPath: 'tests/smoke.spec.ts' }),
+      })
+    ).json();
+
+    await fetch(`${baseUrl}/api/tests/${created.id}/runs`, { method: 'POST', headers: jsonHeaders });
+    await fetch(`${baseUrl}/api/tests/${created.id}/runs`, { method: 'POST', headers: jsonHeaders });
+
+    const fixes: any = await (await fetch(`${baseUrl}/api/pending-fixes`, { headers: jsonHeaders })).json();
+    assert.equal(fixes.length, 1);
+  })
+);
+
+test(
+  'a run with no healing events queues nothing',
+  withServer(fakeRunSpec([]), async ({ baseUrl }) => {
+    const created: any = await (
+      await fetch(`${baseUrl}/api/tests`, {
+        method: 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify({ name: 'Smoke', specPath: 'tests/smoke.spec.ts' }),
+      })
+    ).json();
+
+    await fetch(`${baseUrl}/api/tests/${created.id}/runs`, { method: 'POST', headers: jsonHeaders });
+
+    const fixes: any = await (await fetch(`${baseUrl}/api/pending-fixes`, { headers: jsonHeaders })).json();
+    assert.equal(fixes.length, 0);
+  })
+);

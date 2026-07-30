@@ -1,27 +1,37 @@
-// list/create/rename/delete test cases + trigger a run + fetch its results (Phase 4).
+// list/create/rename/delete test cases + trigger a run + fetch its results (Phase 4; run
+// artifacts/concurrency cap added in Phase 7).
 import type { Request, Response, Router as RouterType } from 'express';
 import type { TestsStore } from '../storage/testsStore';
 import type { RunsStore } from '../storage/runsStore';
+import type { PendingFixesStore } from '../storage/pendingFixesStore';
 import type { RunOutcome } from '../runner';
 
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const defaultRunSpec = require('../runner.ts').runSpec;
+const { RunManager } = require('../execution/runManager.ts');
 
 export interface TestsRouterDeps {
   repoRoot: string;
+  dataDir: string;
   testsStore: TestsStore;
   runsStore: RunsStore;
+  pendingFixesStore: PendingFixesStore;
+  runManager?: { start(): void; finish(): void };
   // Overridable so route logic (validation, storage wiring) can be tested without spawning a
   // real Playwright process — defaults to the real engine in production.
-  runSpec?: (repoRoot: string, specPath: string) => RunOutcome;
+  runSpec?: (repoRoot: string, dataDir: string, specPath: string, runId: string) => Promise<RunOutcome>;
 }
 
 function createTestsRouter({
   repoRoot,
+  dataDir,
   testsStore,
   runsStore,
+  pendingFixesStore,
+  runManager = new RunManager(),
   runSpec = defaultRunSpec,
 }: TestsRouterDeps): RouterType {
   const router = express.Router();
@@ -66,16 +76,36 @@ function createTestsRouter({
     res.status(204).end();
   });
 
-  router.post('/tests/:id/runs', (req: Request<{ id: string }>, res: Response) => {
+  router.post('/tests/:id/runs', async (req: Request<{ id: string }>, res: Response) => {
     const test = testsStore.get(req.params.id);
     if (!test) return res.status(404).json({ error: 'test case not found' });
 
-    const startedAt = new Date().toISOString();
-    const outcome = runSpec(repoRoot, test.specPath);
-    const finishedAt = new Date().toISOString();
+    try {
+      runManager.start();
+    } catch (err: any) {
+      if (err?.message === 'CONCURRENCY_LIMIT') {
+        return res.status(429).json({ error: 'Too many runs in progress — try again shortly.' });
+      }
+      throw err;
+    }
 
-    const run = runsStore.create({ testId: test.id, startedAt, finishedAt, ...outcome });
-    res.status(201).json(run);
+    try {
+      const runId = crypto.randomUUID();
+      const startedAt = new Date().toISOString();
+      const outcome = await runSpec(repoRoot, dataDir, test.specPath, runId);
+      const finishedAt = new Date().toISOString();
+
+      const run = runsStore.create({ id: runId, testId: test.id, startedAt, finishedAt, ...outcome });
+      // Deterministic fallback-healing during this run (Phase 2's resolver, reused as-is) queues
+      // a Pending Fix per healed element instead of the old git-branch/PR flow — see PLAN.md
+      // Phase 8. The run that triggered it already used the healed locator, so it doesn't fail.
+      if (outcome.healingEvents.length > 0) {
+        pendingFixesStore.recordHealing(test.id, outcome.healingEvents, 'fallback');
+      }
+      res.status(201).json(run);
+    } finally {
+      runManager.finish();
+    }
   });
 
   router.get('/tests/:id/runs', (req: Request<{ id: string }>, res: Response) => {

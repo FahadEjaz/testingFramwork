@@ -31,12 +31,17 @@ export interface Run {
   healingEvents: HealingEvent[];
   startedAt: string;
   finishedAt: string;
+  // Whether an HTML report was written to <dataDir>/runs/<id>/report/ (Phase 7). The directory
+  // name is always the run's own id, so no path needs to be stored — just whether it's there.
+  reportAvailable: boolean;
 }
 
 export interface RunsStore {
   get(id: string): Run | undefined;
   listForTest(testId: string): Run[];
-  create(run: Omit<Run, 'id'>): Run;
+  // id is optional so callers that already minted a run id (Phase 7's runner.ts needs the id
+  // before the run starts, to name its artifact directory) can make the stored record match it.
+  create(run: Omit<Run, 'id'> & { id?: string }): Run;
 }
 
 function createRunsStore(dataDir: string): RunsStore {
@@ -70,8 +75,8 @@ function createRunsStore(dataDir: string): RunsStore {
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   }
 
-  function create(run: Omit<Run, 'id'>): Run {
-    const full: Run = { id: crypto.randomUUID(), ...run };
+  function create(run: Omit<Run, 'id'> & { id?: string }): Run {
+    const full: Run = { ...run, id: run.id ?? crypto.randomUUID() };
     fs.mkdirSync(runsDir, { recursive: true });
     fs.writeFileSync(runPath(full.id), `${JSON.stringify(full, null, 2)}\n`);
     writeIndex([...readIndex(), full.id]);

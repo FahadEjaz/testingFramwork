@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { listPendingFixes, updatePendingFix } from '../api';
+import { Link } from 'react-router-dom';
+import { ApiError, listPendingFixes, updatePendingFix } from '../api';
 import { useAuth } from '../auth/AuthContext';
 import { StatusLamp } from '../components/StatusLamp';
 import { formatLocator } from '../lib/runStatus';
@@ -11,6 +12,7 @@ export function PendingFixesPage() {
   const { credentials } = useAuth();
   const { refresh: refreshCount } = usePendingFixesCount();
   const [fixes, setFixes] = useState<PendingFix[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   function reload() {
     if (!credentials) return;
@@ -21,14 +23,23 @@ export function PendingFixesPage() {
 
   async function decide(id: string, status: 'approved' | 'rejected') {
     if (!credentials) return;
-    await updatePendingFix(credentials, id, status);
-    reload();
-    refreshCount();
+    setError(null);
+    try {
+      await updatePendingFix(credentials, id, status);
+      reload();
+      refreshCount();
+    } catch (err) {
+      // Approve can fail if the test/manifest changed since this fix was queued (e.g.
+      // re-recorded) — surface it instead of letting the fix vanish from the list unexplained.
+      setError(err instanceof ApiError ? err.message : `Could not ${status === 'approved' ? 'approve' : 'reject'} this fix.`);
+    }
   }
 
   return (
     <div>
       <h1>Pending Fixes</h1>
+
+      {error && <p className={styles.error}>{error}</p>}
 
       {fixes && fixes.length === 0 && (
         <div className={styles.empty}>Nothing waiting on review — self-healed locators show up here.</div>
@@ -38,13 +49,17 @@ export function PendingFixesPage() {
         {fixes?.map((fix) => (
           <div className={styles.card} key={fix.id}>
             <div className={styles.cardTop}>
-              <div className={styles.cardTitle}>{fix.elementKey}</div>
+              <div>
+                <div className={styles.cardTitle}>{fix.elementKey}</div>
+                <Link className={styles.cardSpec} to={`/tests/${fix.testId}`}>
+                  {fix.spec}
+                </Link>
+              </div>
               <StatusLamp
                 tone="healed"
                 label={fix.source === 'ai' ? 'AI-healed' : 'Fallback-healed'}
               />
             </div>
-            <div className={styles.cardSpec}>{fix.spec}</div>
             <div className={styles.diff}>
               <span className={styles.diffOld}>− {formatLocator(fix.oldPrimary)}</span>
               <span className={styles.diffNew}>+ {formatLocator(fix.newPrimary)}</span>

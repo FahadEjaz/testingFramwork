@@ -61,6 +61,17 @@ export function listRunsForTest(credentials: Credentials, testId: string): Promi
   return request<Run[]>(credentials, `/api/tests/${testId}/runs`);
 }
 
+export function getRun(credentials: Credentials, runId: string): Promise<Run> {
+  return request<Run>(credentials, `/api/runs/${runId}`);
+}
+
+// The report route is deliberately unauthenticated server-side (a browser can't attach a
+// Basic-auth header to an <iframe> page load) — the run id's unguessability is the capability.
+// See server/src/routes/runReport.ts.
+export function reportUrl(runId: string): string {
+  return `/api/runs/${runId}/report/index.html`;
+}
+
 export function listPendingFixes(credentials: Credentials, status?: PendingFixStatus): Promise<PendingFix[]> {
   const query = status ? `?status=${status}` : '';
   return request<PendingFix[]>(credentials, `/api/pending-fixes${query}`);

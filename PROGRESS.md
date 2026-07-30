@@ -5,19 +5,27 @@
 > check here before re-reading REQUIREMENTS.md or PLAN.md in full.
 
 ## Current phase
-Phase 6 — Recording session infrastructure
+Phase 8 — In-app healing review queue
 
 ## Status
-Ready for review on `feature/recording-session`. You committed Phase 4+5 yourself mid-session
-("Phase 4 and 5 done", now `feature/webapp-frontend`'s tip) — confirms the incident recovery
-below was accurate. Phase 6 (this session) plus the Docker removal are uncommitted on top of
-that commit. `feature/webapp-backend` and `feature/deterministic-healing` are both stale/behind
-now; see Branch section at the bottom for what's safe to clean up.
+Ready for review, still on `feature/webapp-execution` — **deviation from PLAN.md's one-branch-
+per-phase workflow**: Phase 8 was built directly on top of Phase 7's still-uncommitted changes on
+the same branch, not a fresh `feature/inapp-healing-review` branch cut from an updated base. This
+wasn't a deliberate choice, it's a consequence of nothing having been committed yet — there was no
+clean commit to branch Phase 8 off of without either committing Phase 7 for you first (not done,
+per your standing preference that you commit, not me) or mixing phases in the working tree, which
+is what happened. If you want clean phase-per-branch history: commit Phase 7's files first on
+`feature/webapp-execution`, then I can move Phase 8's files onto a fresh `feature/inapp-healing-
+review` branched from that commit. Otherwise both phases' diffs are sitting together, uncommitted,
+right now — see Branch section at the bottom for the exact file split.
 Correction to earlier entries in this file: Phase 2 (deterministic self-healing) is **already
 committed on `main`** (`git log` shows it as `main`'s tip commit, "Phase 2 work is complete" —
 the human committed it directly rather than via a merge commit); the "ready for review on
 `feature/deterministic-healing`, not yet merged" note further below is stale and left only as
-history.
+history. Separately: **`main` itself is still at the Phase 2 tip** — Phase 4, 5, and 6 only ever
+landed on `feature/webapp-frontend`/`feature/recording-session`, never merged/fast-forwarded into
+`main`. Worth deciding when to actually update `main`, since PLAN.md's workflow assumes each new
+phase branches from an up-to-date base branch and that's drifted a few phases behind reality.
 
 ## What changed this session (the pivot)
 - User tried the Phase 1 zenity-based recorder and the CLI run instructions from a remote/
@@ -530,6 +538,179 @@ memory/notes rather than trusting my reconstruction blindly.
 - Same root-owned `test-results`/`playwright-report` issue from earlier sessions is still
   unresolved.
 
+---
+
+## Phase 7 session — One-click execution & reporting
+
+## Completed this session
+- `server/runner.ts` rewritten: `execFileSync` → async `execFile` (no longer blocks the whole
+  Node event loop for up to 120s per run — recording sessions/health checks/other requests were
+  previously frozen out for the run's entire duration). Signature changed to
+  `runSpec(repoRoot, dataDir, specPath, runId)`; `runId` is minted by the caller (`routes/
+  tests.ts`) up front so the artifact directory name and the eventual `runsStore` record share
+  the same id, with no separate path field to keep in sync.
+- New `playwright.execution.config.ts` (repo root) — used only by app-triggered runs, never
+  `npm test`/CI (which keep using `playwright.config.ts` untouched). Forces `trace: 'on'`,
+  `video: 'retain-on-failure'`; `outputDir`/report `outputFolder` are read from
+  `PW_RUN_OUTPUT_DIR`/`PW_RUN_REPORT_DIR` env vars set per-run by `runner.ts`, pointing at
+  `<dataDir>/runs/<runId>/{test-results,report}/` — never the repo-root `test-results/`/
+  `playwright-report/` dirs, which sidesteps the recurring root-ownership problem on
+  `playwright-report/` (confirmed still `root:root` this session) entirely rather than fixing it.
+- `runsStore.ts`: `Run` gained `reportAvailable: boolean` (no path stored — the report dir is
+  always `runs/<id>/report/` by construction, so "does `index.html` exist" is the only thing
+  worth persisting). `create()` now accepts an optional caller-supplied `id`.
+- New `server/src/execution/runManager.ts` — run concurrency cap (`MAX_CONCURRENT_RUNS = 2`),
+  same cap-plus-`'CONCURRENCY_LIMIT'`-sentinel-error shape as Phase 6's `sessionManager.ts`, now
+  load-bearing where it wasn't before: async `execFile` means nothing else stopped N simultaneous
+  `POST /tests/:id/runs` calls from spawning N parallel Chromium processes. Route layer turns the
+  sentinel into `429`, same as the recordings route already does for its own cap.
+- New `server/src/routes/runReport.ts` — serves each run's self-contained Playwright HTML report
+  as static files at `GET /api/runs/:runId/report/*`, mounted in `app.ts` **before**
+  `basicAuth`, deliberately unauthenticated (see Decisions below).
+- Frontend: `types.ts`/`api.ts` extended (`reportAvailable` field, `getRun()`, `reportUrl()`);
+  new `RunDetailPage` at `/tests/:testId/runs/:runId` showing status/stats/healed-locator diffs
+  (reusing `StatusLamp`/`formatLocator`/the `PendingFixesPage` diff-card visual pattern) plus an
+  `<iframe>` embed of the run's HTML report, or a plain "No report was generated for this run"
+  message when `reportAvailable` is false (exercised directly against a real pre-Phase-7 run
+  record on disk, which has no `reportAvailable` field at all — `undefined` is falsy, degrades
+  cleanly, confirmed in the browser, no crash). `TestDetailPage`'s run-history rows are now links
+  to this page instead of plain unclickable divs.
+- Verified end-to-end in a real browser (Playwright MCP driving the actual running app, both the
+  Express API on `:4000` and Vite dev server, logged in as `admin`/`change-me`): clicked ▶ Run on
+  an existing (pre-existing junk) test, watched the button show "Running…" and resolve, opened
+  the new run's detail page, and the embedded report iframe rendered a real Playwright HTML
+  report — including a working "View video" link (the test failed, so `retain-on-failure` kept
+  the video) and a working "View Trace" link that opens Playwright's own trace viewer, itself
+  served from the same per-run report directory. All fully in-browser, no CLI, no file access.
+- `npx tsc --noEmit` (repo root) and `npx tsc -b` (`web/`) both clean. `npm run test:server`
+  (13 tests, including 2 new ones covering the report route's 200/404 cases and 3 new
+  `runManager` unit tests) — all passing.
+
+## Decisions & deviations from PLAN.md
+- **Report route is unauthenticated**, mounted before `basicAuth` in `app.ts`. A browser
+  `<iframe>`/page-load request can't attach a custom `Authorization` header, the same limitation
+  Phase 6's `websocketHandler.ts` already hit and documented for the recording websocket. Same
+  fix reused here: the run's id (an unguessable UUID, mintable only via an authenticated
+  `POST /tests/:id/runs`) is the capability token instead of a header. Same accepted tradeoff as
+  Phase 6's — worth a fresh look together if this app ever stops being "one shared login behind
+  a trusted network."
+- **A separate `playwright.execution.config.ts` rather than parameterizing the base config** —
+  trace/video capture is expensive and shouldn't apply to `npm test`/CI, and per-run
+  output/report directories need to be app-controlled; keeping it a fully separate, self-
+  contained config (own `testDir`/`projects`, not merged/imported from the base config) avoids
+  any dependency on Playwright's config-composition API behaving a particular way across
+  versions.
+- **`runId` generated by the route handler, not by `runsStore.create()`** — `runner.ts` needs a
+  run id before the run starts (to name the artifact directory), so `create()` was widened to
+  accept an optional caller-supplied `id` rather than always minting its own. Existing callers
+  that don't pass one are unaffected.
+- **Concurrency cap set to 2**, matching Phase 6's own admission this number is a reasonable
+  guess, not derived from any stated requirement or measured resource limit — same caveat
+  applies here.
+- **No job queue / no async polling UI** — `POST /tests/:id/runs` is still a single blocking
+  request/response (now non-blocking for the rest of the server, but the calling browser tab
+  still waits for the whole run). Consistent with every prior phase's "keep it simple until
+  there's a reason not to" calls (Phase 4's sync REST endpoints, Phase 6's sync `/stop`/`/save`).
+  Revisit if run durations or usage patterns make the UI feel unresponsive.
+- **No artifact retention policy** — every run's `test-results/`+`report/` directories persist
+  under `server/data/runs/<id>/` forever (gitignored, so never committed, but real disk usage on
+  whatever host runs this). Flagged rather than solved — see Open questions.
+
+## Open questions for the human
+- **Artifact retention/cleanup** — nothing prunes old runs' `test-results/`/`report/` directories.
+  Fine for now at this scale/session length, but will grow unbounded in real usage. Needs a
+  policy decision (keep last N runs per test? age-based? only prune passing runs' artifacts?)
+  before this matters in practice.
+- **`main` is 3 phases behind** the actual most-current branch (see Status above) — not something
+  this session should resolve unilaterally, flagging for you to decide when/how to catch it up.
+- Concurrency cap (2) is a guess, same caveat as Phase 6's session count (3) — both worth
+  revisiting together once real usage exists.
+- The unauthenticated report route (see Decisions) is the same open tradeoff Phase 6 already
+  flagged for its websocket — now two capability-token-style unauthenticated paths exist for the
+  same underlying reason. Worth a single combined look if/when auth model changes.
+
+---
+
+## Phase 8 session — In-app healing review queue
+
+## Completed this session
+- **Write path**: `pendingFixesStore.ts` gained `recordHealing(testId, events, source)` — turns a
+  run's `healingEvents` into one queued `PendingFix` per healed element, skipping any element
+  that already has an undecided (`status: 'pending'`) fix queued so a test that keeps healing the
+  same element run after run before anyone reviews it doesn't spam duplicates. `routes/tests.ts`
+  calls it right after `runsStore.create()` in the run handler, with `source: 'fallback'` (Phase
+  2's deterministic fallback chain only — Phase 9 will add `'ai'`). `PendingFix` gained a
+  `fallbackIndex` field (from `HealingEvent`) needed for the approve step below.
+- **Approve path** (the actual gap Phase 8 exists to close — storage/UI for this already existed
+  from Phase 4/5): `routes/pendingFixes.ts` now requires `repoRoot` and, on approve, calls a new
+  `applyFixToFiles()` that **reuses `scripts/lib/manifest.js` and `scripts/lib/patch-spec-
+  locator.js` as-is** — the exact same manifest-promotion and TS-compiler-API spec-rewrite logic
+  `scripts/apply-healing-patches.js` uses for its git-branch flow, per CLAUDE.md's expectation
+  that this logic "is expected to be reused as-is or near-as-is; only where the healing event
+  gets written changes." Only difference: a direct `fs.writeFileSync` on approve, no branch
+  checkout/commit — the end user has no git access at all, so there's nothing to commit to.
+  Guards added: re-deciding an already-decided fix returns `409` instead of silently re-applying;
+  a fix whose manifest entry is gone (test re-recorded/removed since queued) returns `409` and
+  leaves the fix `pending` rather than losing the review. Reject stays a pure status flip, exactly
+  as before — nothing on disk changes, matching REQUIREMENTS.md 3.3 step 5 ("rejecting discards
+  it and the test keeps failing until someone re-records or otherwise fixes it").
+- `createApp()` gained an injectable `runSpec` option (mirroring the existing `sessionManager`
+  injection point) purely for testability — lets the healing-to-Pending-Fix wiring be exercised
+  end-to-end through real HTTP without spawning a real Playwright process for every test case.
+- Frontend: `PendingFix` type gained `fallbackIndex`; `PendingFixesPage` now links each card's
+  spec path to the test's detail page (closes the "which test" part of PLAN.md's Phase 8 bullet
+  list — the spec path alone didn't let you navigate there before), and surfaces approve/reject
+  failures inline (previously a thrown `ApiError` from a 409 would just vanish — reload() and
+  refreshCount() silently wouldn't run, no feedback to the user).
+- **Verified end-to-end in a real browser**, not just via injected fakes: used the Phase 6
+  recorder against `https://playwright.dev/` to generate a real spec + manifest with genuine
+  captured fallback candidates, deliberately broke the "Get started" link's primary locator in
+  both files (swapped it for a bogus CSS selector, moved the original working `role=link` locator
+  into the fallback list), clicked Run — the run came back `Healed`, `1 passed`, `1 locator(s)
+  self-healed`. Opened Pending Fixes, saw the real before/after diff (`− css
+  ".this-element-does-not-exist"` / `+ role "link" named "Get started"`), clicked Approve, and
+  confirmed via direct file reads that the manifest's `primary` and the spec's
+  `resilientLocator(...)` call were both rewritten to the healed locator. Ran the test again:
+  plain `Passed`, no healing — confirms Approve genuinely changes what the *next* run uses as
+  primary, which is PLAN.md's exact "done when" bar for this phase. Deleted the demo test/spec/
+  manifest afterward (verification artifact, not product content), same as the Phase 6 session's
+  own precedent.
+- `npx tsc --noEmit` (repo root) and `npx tsc -b` (`web/`) both clean. `npm run test:server`: 20
+  tests passing — added a dedicated `pendingFixesStore.test.ts` (4 tests, pure unit tests for
+  `recordHealing`'s dedup logic), a new `healingToPendingFixes.test.ts` (3 tests, HTTP-level via
+  the injected fake `runSpec`), and rewrote the old `app.test.ts` "pending fixes" test — it
+  previously approved a fix pointing at a nonexistent spec/manifest, which the new file-patching
+  approve logic correctly now rejects with `409`; replaced with a real fixture spec+manifest so
+  approve's actual file-patching is asserted (manifest `primary`/`fallbacks` reshaped correctly,
+  spec's locator expression rewritten), plus new cases for the double-decide and missing-manifest
+  `409`s.
+
+## Decisions & deviations from PLAN.md
+- **No new branch for this phase** — see Status above; a real, non-cosmetic deviation from the
+  "one feature branch per phase" workflow, caused by nothing being committed yet to branch off.
+- **`scripts/apply-healing-patches.js` left in place, untouched, as a dev-only tool** rather than
+  deleted — PLAN.md explicitly left this as a "decide at the time" call. Nothing in the app calls
+  it (never did), so there's no behavior overlap/conflict; it remains usable standalone against
+  `test-results/healing-events.jsonl` for anyone still working via the CLI/git path directly.
+- **Approve failures are `409`, not `500`** — both "already decided" and "manifest entry missing"
+  are treated as conflicts with the fix's current state rather than server errors, since neither
+  indicates a bug: they're "someone/something already resolved this" or "the world moved on since
+  this was queued."
+- **Dedup key for `recordHealing` is `(testId, spec, elementKey)` with `status: 'pending'`** —
+  once a fix is approved or rejected, the *next* healing event for that same element queues a
+  fresh fix rather than being permanently suppressed. Matches the real lifecycle: rejecting means
+  "don't fix it *now*", not "never ask again."
+
+## Open questions for the human
+- Same branch/commit question as Status above — your call on whether to split Phase 7/8 onto
+  separate branches (requires committing Phase 7 first) or just treat this as one combined chunk
+  of work to commit together.
+- No audit trail of *who* approved/rejected a fix (single shared login, so "who" is always just
+  "the team") or *when* beyond `updatedAt` — fine for v1 per REQUIREMENTS.md's single-shared-login
+  scope, flagging in case that changes.
+- `main` is now 4 phases behind (Phase 2 tip vs. Phase 4-8 all sitting on feature branches) — same
+  open item as Phase 7's, growing.
+
 ## Branch
 - `feature/deterministic-healing` — stale/redundant; same commit as `main`, safe to delete once
   confirmed.
@@ -537,8 +718,10 @@ memory/notes rather than trusting my reconstruction blindly.
   commit, which already includes everything this branch has plus Phase 5. Safe to delete once
   confirmed, or rebase if it was meant to track something separately.
 - `feature/webapp-frontend` — Phase 4+5, **committed** (`7077e39` "Phase 4 and 5 done").
-  Currently the most up-to-date base for anything else.
-- `feature/recording-session` — Phase 6, ready to hand off for review. Branched from
-  `feature/webapp-frontend`'s tip (which, per PLAN.md workflow, was the current base branch at
-  the time — Phase 4+5 had just been committed there). Also carries the Docker removal from this
-  session, uncommitted on top of the same commit.
+- `feature/recording-session` — Phase 6, **committed** (`87197b4` "phase 6 done") — corrects this
+  file's earlier note calling it uncommitted. Also still carries the Docker removal from that
+  session on top of the same commit, uncommitted.
+- `feature/webapp-execution` — Phase 7 **and** Phase 8 (this session), branched from
+  `feature/recording-session`'s tip. Ready to hand off for review; uncommitted; both phases' file
+  changes are currently mixed together in the working tree (see Status above for the branch-split
+  option). Currently the most up-to-date branch overall.

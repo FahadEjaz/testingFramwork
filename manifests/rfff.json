@@ -1,0 +1,95 @@
+{
+  "spec": "tests/rfff.spec.ts",
+  "elements": {
+    "element1": {
+      "primary": {
+        "strategy": "role",
+        "role": "combobox",
+        "name": "Search"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "#APjFqb"
+        },
+        {
+          "strategy": "text",
+          "value": "Search"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(1) > div > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > textarea"
+        }
+      ]
+    },
+    "element2": {
+      "primary": {
+        "strategy": "css",
+        "value": "div:nth-of-type(1) > span"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "fbr small shopkeepers tax scheme"
+        },
+        {
+          "strategy": "css",
+          "value": "li:nth-of-type(1) > div > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1) > span"
+        }
+      ]
+    },
+    "element3": {
+      "primary": {
+        "strategy": "css",
+        "value": "div:nth-of-type(1) > div"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "About this page Our systems have detected unusual traffic from your computer net"
+        },
+        {
+          "strategy": "css",
+          "value": "html > body > div:nth-of-type(1) > div"
+        }
+      ]
+    },
+    "element4": {
+      "primary": {
+        "strategy": "css",
+        "value": "div:nth-of-type(1) > img"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "tbody > tr:nth-of-type(1) > td:nth-of-type(1) > div > div:nth-of-type(1) > img"
+        },
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-0__"
+        }
+      ]
+    },
+    "element5": {
+      "primary": {
+        "strategy": "role",
+        "role": "button",
+        "name": "Verify"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "#recaptcha-verify-button"
+        },
+        {
+          "strategy": "text",
+          "value": "Verify"
+        },
+        {
+          "strategy": "css",
+          "value": "div > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(2) > button"
+        }
+      ]
+    }
+  }
+}

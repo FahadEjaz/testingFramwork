@@ -37,6 +37,7 @@ export interface Run {
   healingEvents: HealingEvent[];
   startedAt: string;
   finishedAt: string;
+  reportAvailable: boolean;
 }
 
 export type PendingFixSource = 'fallback' | 'ai';
@@ -49,6 +50,7 @@ export interface PendingFix {
   elementKey: string;
   oldPrimary: unknown;
   newPrimary: unknown;
+  fallbackIndex: number;
   source: PendingFixSource;
   status: PendingFixStatus;
   createdAt: string;

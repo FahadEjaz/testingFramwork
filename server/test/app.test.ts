@@ -145,9 +145,19 @@ test(
       assert.equal(run.healed, false);
       assert.equal(run.stats.expected, 1);
       assert.equal(run.stats.unexpected, 0);
+      assert.equal(run.reportAvailable, true);
 
       const fetchedRun: any = await (await fetch(`${baseUrl}/api/runs/${run.id}`, { headers: jsonHeaders })).json();
       assert.equal(fetchedRun.id, run.id);
+
+      // Report route is deliberately unauthenticated (browser <iframe>/page loads can't attach a
+      // Basic-auth header) — the run id's unguessability is the capability, see runReport.ts.
+      const reportRes = await fetch(`${baseUrl}/api/runs/${run.id}/report/index.html`);
+      assert.equal(reportRes.status, 200);
+      assert.match(String(reportRes.headers.get('content-type')), /html/);
+
+      const missingReport = await fetch(`${baseUrl}/api/runs/does-not-exist/report/index.html`);
+      assert.equal(missingReport.status, 404);
 
       const runsForTest: any = await (
         await fetch(`${baseUrl}/api/tests/${created.id}/runs`, { headers: jsonHeaders })
@@ -166,44 +176,113 @@ test(
 );
 
 test(
-  'pending fixes: list, filter by status, approve/reject',
+  'pending fixes: list, filter by status, approve patches manifest+spec, reject leaves files alone',
   withServer(async ({ baseUrl, dataDir }) => {
-    const { createPendingFixesStore } = require('../src/storage/pendingFixesStore.ts');
-    const store = createPendingFixesStore(dataDir);
-    const fix = store.add({
-      testId: 't1',
-      spec: 'tests/x.spec.ts',
-      elementKey: 'submit',
-      oldPrimary: { strategy: 'css', value: '.old' },
-      newPrimary: { strategy: 'role', role: 'button' },
-      source: 'fallback',
-    });
+    const fixtureSpecRelative = 'tests/__phase8-fixture.spec.ts';
+    const fixtureSpecAbsolute = path.join(repoRoot, fixtureSpecRelative);
+    const fixtureManifestAbsolute = path.join(repoRoot, 'manifests', '__phase8-fixture.json');
 
-    const list: any = await (await fetch(`${baseUrl}/api/pending-fixes`, { headers: jsonHeaders })).json();
-    assert.equal(list.length, 1);
-    assert.equal(list[0].status, 'pending');
+    const manifest = {
+      spec: fixtureSpecRelative,
+      elements: {
+        submit: {
+          primary: { strategy: 'css', value: '.old-primary' },
+          fallbacks: [
+            { strategy: 'role', role: 'button', name: 'Submit' },
+            { strategy: 'testId', value: 'submit-btn' },
+          ],
+        },
+      },
+    };
+    fs.writeFileSync(fixtureManifestAbsolute, `${JSON.stringify(manifest, null, 2)}\n`);
+    fs.writeFileSync(
+      fixtureSpecAbsolute,
+      `resilientLocator(page, ${JSON.stringify(fixtureSpecRelative)}, 'submit', () => page.locator('.old-primary'));\n`
+    );
 
-    const badStatus = await fetch(`${baseUrl}/api/pending-fixes?status=bogus`, { headers: jsonHeaders });
-    assert.equal(badStatus.status, 400);
+    try {
+      const { createPendingFixesStore } = require('../src/storage/pendingFixesStore.ts');
+      const store = createPendingFixesStore(dataDir);
+      const fix = store.add({
+        testId: 't1',
+        spec: fixtureSpecRelative,
+        elementKey: 'submit',
+        oldPrimary: manifest.elements.submit.primary,
+        newPrimary: manifest.elements.submit.fallbacks[0],
+        fallbackIndex: 0,
+        source: 'fallback',
+      });
 
-    const approveRes = await fetch(`${baseUrl}/api/pending-fixes/${fix.id}`, {
-      method: 'PATCH',
-      headers: jsonHeaders,
-      body: JSON.stringify({ status: 'approved' }),
-    });
-    assert.equal(approveRes.status, 200);
-    assert.equal(((await approveRes.json()) as any).status, 'approved');
+      const list: any = await (await fetch(`${baseUrl}/api/pending-fixes`, { headers: jsonHeaders })).json();
+      assert.equal(list.length, 1);
+      assert.equal(list[0].status, 'pending');
 
-    const filtered: any = await (
-      await fetch(`${baseUrl}/api/pending-fixes?status=approved`, { headers: jsonHeaders })
-    ).json();
-    assert.equal(filtered.length, 1);
+      const badStatus = await fetch(`${baseUrl}/api/pending-fixes?status=bogus`, { headers: jsonHeaders });
+      assert.equal(badStatus.status, 400);
 
-    const notFound = await fetch(`${baseUrl}/api/pending-fixes/does-not-exist`, {
-      method: 'PATCH',
-      headers: jsonHeaders,
-      body: JSON.stringify({ status: 'approved' }),
-    });
-    assert.equal(notFound.status, 404);
+      const approveRes = await fetch(`${baseUrl}/api/pending-fixes/${fix.id}`, {
+        method: 'PATCH',
+        headers: jsonHeaders,
+        body: JSON.stringify({ status: 'approved' }),
+      });
+      assert.equal(approveRes.status, 200);
+      assert.equal(((await approveRes.json()) as any).status, 'approved');
+
+      const patchedManifest = JSON.parse(fs.readFileSync(fixtureManifestAbsolute, 'utf8'));
+      assert.deepEqual(patchedManifest.elements.submit.primary, {
+        strategy: 'role',
+        role: 'button',
+        name: 'Submit',
+      });
+      assert.deepEqual(patchedManifest.elements.submit.fallbacks, [
+        { strategy: 'css', value: '.old-primary' },
+        { strategy: 'testId', value: 'submit-btn' },
+      ]);
+
+      const patchedSpec = fs.readFileSync(fixtureSpecAbsolute, 'utf8');
+      assert.match(patchedSpec, /page\.getByRole\('button', \{ name: 'Submit' \}\)/);
+
+      const filtered: any = await (
+        await fetch(`${baseUrl}/api/pending-fixes?status=approved`, { headers: jsonHeaders })
+      ).json();
+      assert.equal(filtered.length, 1);
+
+      // Already-decided fixes can't be re-applied silently.
+      const reapprove = await fetch(`${baseUrl}/api/pending-fixes/${fix.id}`, {
+        method: 'PATCH',
+        headers: jsonHeaders,
+        body: JSON.stringify({ status: 'approved' }),
+      });
+      assert.equal(reapprove.status, 409);
+
+      // A fix whose manifest entry is gone (test re-recorded/removed since it was queued) fails
+      // the approve instead of silently discarding the review — the fix stays 'pending'.
+      const orphanFix = store.add({
+        testId: 't1',
+        spec: 'tests/__phase8-does-not-exist.spec.ts',
+        elementKey: 'ghost',
+        oldPrimary: { strategy: 'css', value: '.x' },
+        newPrimary: { strategy: 'role', role: 'button' },
+        fallbackIndex: 0,
+        source: 'fallback',
+      });
+      const orphanApprove = await fetch(`${baseUrl}/api/pending-fixes/${orphanFix.id}`, {
+        method: 'PATCH',
+        headers: jsonHeaders,
+        body: JSON.stringify({ status: 'approved' }),
+      });
+      assert.equal(orphanApprove.status, 409);
+      assert.equal(store.get(orphanFix.id).status, 'pending');
+
+      const notFound = await fetch(`${baseUrl}/api/pending-fixes/does-not-exist`, {
+        method: 'PATCH',
+        headers: jsonHeaders,
+        body: JSON.stringify({ status: 'approved' }),
+      });
+      assert.equal(notFound.status, 404);
+    } finally {
+      fs.rmSync(fixtureSpecAbsolute, { force: true });
+      fs.rmSync(fixtureManifestAbsolute, { force: true });
+    }
   })
 );
