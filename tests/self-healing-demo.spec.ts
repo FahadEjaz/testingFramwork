@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/fixtures';
 import { resilientLocator } from './support/resilient-locator';
 
 const SPEC = 'tests/self-healing-demo.spec.ts';

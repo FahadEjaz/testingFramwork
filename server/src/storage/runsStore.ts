@@ -5,12 +5,21 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
 export interface HealingEvent {
   spec: string;
   elementKey: string;
   oldPrimary: unknown;
   newPrimary: unknown;
   fallbackIndex: number;
+  // 'fallback' = Phase 2's deterministic chain; 'ai' = Phase 9's failure-path AI call.
+  source: 'fallback' | 'ai';
+  // Only present for source: 'ai' — REQUIREMENTS.md 3.4/Phase 9's "token cost visible" bar.
+  tokensUsed?: TokenUsage;
   timestamp: string;
 }
 

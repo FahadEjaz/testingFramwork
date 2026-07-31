@@ -64,6 +64,11 @@ export function PendingFixesPage() {
               <span className={styles.diffOld}>− {formatLocator(fix.oldPrimary)}</span>
               <span className={styles.diffNew}>+ {formatLocator(fix.newPrimary)}</span>
             </div>
+            {fix.tokensUsed && (
+              <div className={styles.tokens}>
+                {fix.tokensUsed.inputTokens} in / {fix.tokensUsed.outputTokens} out tokens
+              </div>
+            )}
             <div className={styles.actions}>
               <button className={styles.reject} onClick={() => decide(fix.id, 'rejected')} type="button">
                 Reject

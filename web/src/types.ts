@@ -19,12 +19,19 @@ export interface RunStats {
   duration: number;
 }
 
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
 export interface HealingEvent {
   spec: string;
   elementKey: string;
   oldPrimary: unknown;
   newPrimary: unknown;
   fallbackIndex: number;
+  source: 'fallback' | 'ai';
+  tokensUsed?: TokenUsage;
   timestamp: string;
 }
 
@@ -52,6 +59,7 @@ export interface PendingFix {
   newPrimary: unknown;
   fallbackIndex: number;
   source: PendingFixSource;
+  tokensUsed?: TokenUsage;
   status: PendingFixStatus;
   createdAt: string;
   updatedAt: string;

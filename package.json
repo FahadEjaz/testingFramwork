@@ -16,6 +16,8 @@
     "test:server": "node --test server/test/*.test.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
+    "@axe-core/playwright": "^4.12.1",
     "express": "^5.2.1",
     "ws": "^8.21.1"
   },

@@ -1,7 +1,7 @@
 // File-backed store for the Pending Fixes queue (Phase 4 storage foundation; Phase 8 wires
 // Phase 2's fallback-healing pipeline into it and adds the manifest/spec-patching side of
 // Approve — see PLAN.md / REQUIREMENTS.md 3.3).
-import type { HealingEvent } from './runsStore';
+import type { HealingEvent, TokenUsage } from './runsStore';
 
 const fs = require('fs');
 const path = require('path');
@@ -22,6 +22,8 @@ export interface PendingFix {
   // `primary`. Mirrors scripts/apply-healing-patches.js's HealingEvent-driven patch logic.
   fallbackIndex: number;
   source: PendingFixSource;
+  // Only present for source: 'ai' — REQUIREMENTS.md 3.4/Phase 9's "token cost visible" bar.
+  tokensUsed?: TokenUsage;
   status: PendingFixStatus;
   createdAt: string;
   updatedAt: string;
@@ -99,6 +101,7 @@ function createPendingFixesStore(dataDir: string): PendingFixesStore {
         newPrimary: event.newPrimary,
         fallbackIndex: event.fallbackIndex,
         source,
+        tokensUsed: event.tokensUsed,
         status: 'pending',
         createdAt: now,
         updatedAt: now,

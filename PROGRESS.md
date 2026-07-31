@@ -5,27 +5,23 @@
 > check here before re-reading REQUIREMENTS.md or PLAN.md in full.
 
 ## Current phase
-Phase 8 — In-app healing review queue
+Phase 10 — Quality add-ons (accessibility + visual regression)
 
 ## Status
-Ready for review, still on `feature/webapp-execution` — **deviation from PLAN.md's one-branch-
-per-phase workflow**: Phase 8 was built directly on top of Phase 7's still-uncommitted changes on
-the same branch, not a fresh `feature/inapp-healing-review` branch cut from an updated base. This
-wasn't a deliberate choice, it's a consequence of nothing having been committed yet — there was no
-clean commit to branch Phase 8 off of without either committing Phase 7 for you first (not done,
-per your standing preference that you commit, not me) or mixing phases in the working tree, which
-is what happened. If you want clean phase-per-branch history: commit Phase 7's files first on
-`feature/webapp-execution`, then I can move Phase 8's files onto a fresh `feature/inapp-healing-
-review` branched from that commit. Otherwise both phases' diffs are sitting together, uncommitted,
-right now — see Branch section at the bottom for the exact file split.
-Correction to earlier entries in this file: Phase 2 (deterministic self-healing) is **already
-committed on `main`** (`git log` shows it as `main`'s tip commit, "Phase 2 work is complete" —
-the human committed it directly rather than via a merge commit); the "ready for review on
-`feature/deterministic-healing`, not yet merged" note further below is stale and left only as
-history. Separately: **`main` itself is still at the Phase 2 tip** — Phase 4, 5, and 6 only ever
-landed on `feature/webapp-frontend`/`feature/recording-session`, never merged/fast-forwarded into
-`main`. Worth deciding when to actually update `main`, since PLAN.md's workflow assumes each new
-phase branches from an up-to-date base branch and that's drifted a few phases behind reality.
+Ready for review, still on `feature/ai-healing` (uncommitted) — **same deviation as the Phase 8
+session**: Phase 10 was built directly on top of Phase 9's still-uncommitted changes on the same
+branch, since there was no clean commit yet to cut a fresh `feature/quality-checks` branch from.
+If you want clean phase-per-branch history: commit Phase 9's files first on `feature/ai-healing`,
+and Phase 10's files can move onto a fresh branch from that commit; otherwise both phases' diffs
+are sitting together right now (see Branch section for the file split). Note also two untracked
+files in the working tree that are **not** part of either phase and were left untouched:
+`tests/aaqq.spec.ts` + `manifests/aaqq.json` — a real recording made through the app's own
+recorder (Phase 6), presumably yours from testing the app; not migrated to the new `fixtures.ts`
+import (see Decisions) since it isn't one of this repo's canonical example specs.
+
+Phase 8/9 branch history: Phase 8 is committed (`4c48185` "Phase 8 done", `feature/webapp-
+execution`'s tip); Phase 9 was built on a fresh `feature/ai-healing` branch cut from that commit
+but is itself still uncommitted going into this session.
 
 ## What changed this session (the pivot)
 - User tried the Phase 1 zenity-based recorder and the CLI run instructions from a remote/
@@ -721,7 +717,274 @@ memory/notes rather than trusting my reconstruction blindly.
 - `feature/recording-session` — Phase 6, **committed** (`87197b4` "phase 6 done") — corrects this
   file's earlier note calling it uncommitted. Also still carries the Docker removal from that
   session on top of the same commit, uncommitted.
-- `feature/webapp-execution` — Phase 7 **and** Phase 8 (this session), branched from
-  `feature/recording-session`'s tip. Ready to hand off for review; uncommitted; both phases' file
-  changes are currently mixed together in the working tree (see Status above for the branch-split
-  option). Currently the most up-to-date branch overall.
+- `feature/webapp-execution` — Phase 7 **and** Phase 8, committed as `4c48185` "Phase 8 done".
+- `feature/ai-healing` — Phase 9 (this session), branched from `feature/webapp-execution`'s tip.
+  Ready for review; uncommitted.
+
+---
+
+## Phase 9 session — AI healing escalation
+
+## Completed this session
+- Added `@anthropic-ai/sdk` (dependency, `^0.115.0`) — the one new package this phase needed.
+- `scripts/lib/dom-context.js` — `extractDomContext(page, opts?)`: the scoped-context extractor
+  REQUIREMENTS.md 3.3 step 4 calls for. Runs one `page.evaluate()` against the live page, pulling
+  only interactive elements (`a,button,input,select,textarea,[role],[data-testid],label`) capped
+  at 40 elements, each pruned to `{tag, attrs, text}` with `attrs` limited to a fixed allow-list
+  (id/class/role/name/type/placeholder/aria-label/data-testid/href) and `text` truncated to 80
+  chars — never `<script>`/`<style>` contents, never the full page HTML. Output is further capped
+  at 6000 chars total as a hard ceiling. Verified via `<3` real headless-Chromium tests
+  (`server/test/domContext.test.ts`) that script/style content never leaks and the size cap holds
+  even with 500 injected elements.
+- `scripts/lib/ai-heal-client.js` — `requestHealedLocator({elementKey, oldPrimary, domContext}, deps?)`:
+  the single scoped AI call itself. Sends only the failed locator's old definition + the pruned DOM
+  snippet above — never the full page, never secrets/credentials/PII, matching REQUIREMENTS.md 3.3
+  step 4 and Section 4's security bullet. Model defaults to `claude-haiku-4-5-20251001`
+  (overridable via `AI_HEAL_MODEL`), gated on `ANTHROPIC_API_KEY` (no default — throws immediately
+  if unset, caught by the caller as a best-effort miss, not a crash). Response is required to be a
+  single bare JSON object matching `manifests/schema.json`'s locator shape (`parseLocatorEntry`,
+  also exported standalone for direct unit testing); anything else — non-JSON, an unrecognized
+  `strategy`, a `role` locator missing `role`, etc. — throws with the raw response text in the
+  error so a human debugging a bad AI response can see exactly what came back. `deps.client` lets
+  tests inject a fake Anthropic client instead of hitting the real API, the same injectable-
+  dependency pattern `server/src/app.ts` already uses for `runSpec`/`sessionManager`. Token usage
+  (`input_tokens`/`output_tokens` from the response) is returned alongside the parsed locator so
+  the caller can log/store cost, per Phase 9's "done when" bar.
+- `tests/support/resilient-locator.ts`: added step 4 of REQUIREMENTS.md 3.3 after the existing
+  fallback loop (steps 1-3, unchanged) — if every manifest fallback also fails, extracts the DOM
+  context, calls `requestHealedLocator`, and if the AI's proposed locator actually resolves on the
+  live page, logs `[AI-HEALED]` (with token counts) and returns it, healing that specific run's
+  result exactly like a fallback heal does. Wrapped in its own try/catch so a missing API key, a
+  network error, a malformed AI response, or the AI's candidate still not resolving all fall
+  through silently (a `console.warn`, not a crash) to the pre-existing `throw primaryError` — AI
+  escalation is additive and best-effort, it never changes how or whether a test fails when it's
+  unavailable. The AI client is now referenced as `aiHealClient.<fn>` (module namespace) rather
+  than destructured, purely so tests can monkey-patch `aiHealClient.requestHealedLocator` with a
+  fake before exercising this file, without needing a real network call or API key.
+- `tests/ai-healing-demo.spec.ts` + `manifests/ai-healing-demo.json` — a new worked example,
+  deliberately network-free (unlike `self-healing-demo.spec.ts`'s live playwright.dev target): a
+  local fixture page whose primary *and* both manifest fallbacks are broken on purpose, so the
+  only way through is AI escalation. Two tests: one monkey-patches `aiHealClient.requestHealedLocator`
+  to return a correct locator and asserts the healed locator actually resolves and is clickable;
+  the other deletes `ANTHROPIC_API_KEY` and asserts the call still fails cleanly with the original
+  locator error (no crash, no different failure mode) — this is the realistic CI/default-config
+  case, since no API key is configured anywhere in this repo. Both run in the normal `npm test`
+  suite alongside the existing 4 specs, need no `ANTHROPIC_API_KEY` to pass, and add no network
+  dependency or flakiness.
+- **Storage/plumbing to carry AI-sourced heals into Phase 8's Pending Fixes queue**, reusing
+  Phase 8's approve/reject mechanism as-is:
+  - `server/src/storage/runsStore.ts`'s `HealingEvent` gained `source: 'fallback'|'ai'` (now
+    required — every event, fallback or AI, is tagged at the point it's logged in
+    `resilient-locator.ts`) and an optional `tokensUsed: {inputTokens, outputTokens}` (AI only).
+  - `server/src/storage/pendingFixesStore.ts`'s `PendingFix` gained the matching optional
+    `tokensUsed`, threaded through in `recordHealing()`.
+  - `server/src/routes/tests.ts`: a single run's `healingEvents` can now legitimately contain both
+    `'fallback'` and `'ai'`-sourced events (AI only escalates per-element, after that element's own
+    fallback chain is exhausted, so a multi-element test could heal some elements via fallback and
+    others via AI in the same run) — split by `event.source` before calling `recordHealing()`
+    (once per source) rather than assuming one source for the whole batch, since `recordHealing`'s
+    existing signature takes one `source` for the whole array.
+  - **No change needed** to `server/src/routes/pendingFixes.ts`'s `applyFixToFiles()` (Phase 8's
+    Approve file-patching) — an AI-sourced fix's `fallbackIndex` is logged as `-1` (there's no
+    existing manifest fallback slot the AI's locator came from), and the existing
+    `entry.fallbacks.filter((_, i) => i !== fix.fallbackIndex)` line already does the right thing
+    for a sentinel that never matches a real array index: it keeps every existing fallback
+    unchanged and simply prepends the old primary into the fallback pool, exactly like a fallback-
+    sourced approve would with one *fewer* fallback removed. Verified by hand (see Decisions) —
+    the manifest promotion logic Phase 2/8 already wrote turned out to generalize to Phase 9's case
+    for free.
+  - Frontend (`web/src/types.ts`, already-existing `PendingFixesPage.tsx`/`RunDetailPage.tsx`):
+    `HealingEvent`/`PendingFix` types gained the matching `source`/`tokensUsed` fields.
+    `PendingFixesPage.tsx` already branched on `fix.source === 'ai'` to show "AI-healed" vs
+    "Fallback-healed" (built ahead of time in Phase 5/8, never previously exercised since nothing
+    produced `source: 'ai'` until now) — added a small token-count line under the diff when
+    `tokensUsed` is present, satisfying REQUIREMENTS.md 3.4/Phase 9's "token cost visible" bar.
+    `RunDetailPage.tsx`'s self-healed-locators list didn't show source at all before this session —
+    added the same `StatusLamp` label + token-count line there too, so a run's own report page
+    shows AI vs fallback per healed element, not just the Pending Fixes queue.
+- Unit tests: `server/test/aiHealClient.test.ts` (8 tests — response parsing for both locator
+  shapes, whitespace tolerance, rejection of non-JSON/unrecognized-strategy/missing-field
+  responses, the no-API-key/no-injected-client failure, and `parseLocatorEntry` exported
+  standalone) and `server/test/domContext.test.ts` (3 tests, real headless Chromium — interactive-
+  element filtering, script/style non-leakage, size cap under load) — all mock/self-contained, no
+  real Anthropic API calls anywhere in the automated suite. `server/test/healingToPendingFixes.test.ts`
+  extended with an AI-sourced-event case and a mixed-fallback-and-ai-in-one-run case (2 new tests);
+  its pre-existing fixture event needed a `source: 'fallback'` field added since `HealingEvent`
+  now requires it (the route's new source-split logic would otherwise have silently dropped that
+  test's event, since it matched neither filter — caught by actually running the suite, not
+  assumed safe).
+- `npx tsc --noEmit` (repo root) and `npx tsc -b` (`web/`) both clean. `npm run test:server`: 33
+  tests passing (20 from Phase 4-8 + 13 new this session). Full Playwright suite on chromium: 6
+  passed (the 4 pre-existing specs + this session's 2 new AI-healing-demo tests) — the 3 failures
+  `npx playwright test` also reports (`tests/aaa.spec.ts`, `tests/dddd.spec.ts`, `tests/rfff.spec.ts`)
+  are pre-existing junk from earlier manual verification against real external sites (Google,
+  a shop site), already committed before this session and unrelated to this session's changes —
+  confirmed via `git log` that they predate this branch and `git diff` that this session never
+  touched them.
+- Hand-verified the Approve path's manifest-patching logic for an AI-sourced fix (`fallbackIndex:
+  -1`) against a throwaway fixture manifest via a standalone script — confirmed the primary
+  becomes the AI locator and the old primary is correctly prepended into `fallbacks` with the
+  other fallbacks untouched (see Decisions for the caveat this surfaced).
+
+## Decisions & deviations from PLAN.md
+- **Branched from `feature/webapp-execution`'s tip, not `main`** — same reasoning and precedent as
+  Phase 7/8 (see their own "Decisions" entries): Phase 9's code depends on Phase 4-8's `server/`
+  storage/routes, which only exist on that branch.
+- **AI escalation is gated on `ANTHROPIC_API_KEY` with no default/fallback key** — matches
+  REQUIREMENTS.md's "no vendor lock-in"/security framing (a model call is opt-in infrastructure,
+  not baked in) and means every existing test/demo in this repo keeps working unmodified with zero
+  config, since nothing sets that env var. This was deliberately exercised as its own test case
+  (`tests/ai-healing-demo.spec.ts`'s second test) rather than left as an assumption.
+- **DOM context extraction caps are hand-picked (40 elements, 6000 chars), not derived from a
+  token-budget calculation** — a reasonable-guess default in the same spirit as Phase 6/7's
+  concurrency-cap/idle-timeout guesses; worth revisiting once real AI-healing usage/cost data
+  exists.
+- **`fallbackIndex: -1` sentinel for AI-sourced events**, rather than extending the manifest-patch
+  logic to handle "this locator has no prior fallback slot" as an explicit case. Chosen because
+  the existing `filter((_, i) => i !== fix.fallbackIndex)` already produces the correct result for
+  an index that can never match (see Completed above) — reusing it as-is is more in the spirit of
+  "Phase 2's resolver logic is expected to be reused as-is or near-as-is" (CLAUDE.md) than adding a
+  parallel code path. Flagging the one real edge case this introduces under Open questions below.
+- **No CI cost/time separation for AI calls added** — CLAUDE.md's Phase 3-era note that this was
+  "deferred until Phase 3 introduces AI calls" now applies to this session, but token cost is
+  currently only visible per-fix in the Pending Fixes/run-detail UI, not aggregated anywhere.
+  REQUIREMENTS.md/PLAN.md's Phase 11 ("hardening") is where aggregated token/cost logging is
+  explicitly scoped — left for that phase rather than added speculatively here.
+- Made a small, targeted correction to `CLAUDE.md` (not a new phase's job normally, but directly
+  falsified by this session's own work): removed the "Nothing in the codebase calls an AI model
+  anywhere yet" line, added a short note on `resilient-locator.ts`'s new step 4, and flagged (but
+  did not attempt to fix) that the whole "Architecture" section still only describes Phases 0-2 —
+  it was never updated for the Phase 4-9 web-app pivot at all (no mention of `server/`/`web/`
+  anywhere in it). Full rewrite felt like scope creep for this session; flagging it explicitly
+  instead so it doesn't stay silently wrong.
+
+## Open questions for the human
+- **Manifest `fallbacks` can exceed `manifests/schema.json`'s `maxItems: 3`` after approving an
+  AI-sourced fix**, if the element already had 3 fallbacks before the AI healed it (old primary +
+  3 existing fallbacks = 4). Nothing in the codebase currently validates a manifest against
+  `schema.json` at runtime (confirmed — it's `not yet wired into any runtime logic` per CLAUDE.md,
+  unchanged by this session), so this doesn't break anything today, but it is a real, now-
+  reachable way for a manifest to silently drift out of its own documented schema. Worth deciding
+  whether to (a) add runtime schema validation somewhere, (b) cap fallbacks on write (drop the
+  oldest), or (c) leave it as documentation-only, same open-ended state as before this session.
+- No real end-to-end verification against the actual Anthropic API was possible this session — no
+  `ANTHROPIC_API_KEY` is available in this environment. Everything is verified via injected-fake-
+  client unit tests (`aiHealClient.test.ts`) and a monkey-patched integration demo
+  (`ai-healing-demo.spec.ts`), which prove the plumbing/parsing/wiring end-to-end, but a real
+  live call (real Haiku response quality on a real broken locator) has never actually happened.
+  Worth a manual dry run with a real key before trusting this in production.
+- CLAUDE.md's Architecture section staleness (see Decisions above) is bigger than this phase's
+  scope — someone should do a dedicated pass rewriting it to describe `server/`/`web/` and Phases
+  4-9, since right now it only documents the pre-pivot CLI engine.
+- `main` is now 5 phases behind (`feature/ai-healing` is the most current branch) — same
+  recurring open item as every session since Phase 4, now one phase further along.
+- Same root-owned `test-results`/`playwright-report` issue from the very first sessions is,
+  presumably, still unresolved (not re-checked this session — Phase 9's own new tests write to
+  temp dirs/`server/data`, not the repo-root dirs, so it didn't come up).
+
+## Branch
+- `feature/ai-healing` — Phase 9 **and** Phase 10 (see next entry), branched from
+  `feature/webapp-execution`'s tip (`4c48185`). Ready for review; uncommitted; both phases' file
+  changes are currently mixed together in the working tree.
+
+---
+
+## Phase 10 session — Quality add-ons (accessibility + visual regression)
+
+## Completed this session
+- Added `@axe-core/playwright` (dependency, `^4.12.1`) — the one new package this phase needed.
+- `tests/support/fixtures.ts` — the "base test fixture" PLAN.md's Phase 10 bullet calls for: a
+  `test` extended from `@playwright/test`'s, overriding the `page` fixture so that once a test
+  body finishes, whatever page state remains gets one `@axe-core/playwright` scan
+  (REQUIREMENTS.md 3.7). A violation never fails the test — a target site's own pre-existing
+  accessibility issues aren't this framework's to start enforcing — it's purely observational:
+  results are attached to the test's Playwright report entry (`accessibility-scan`, trimmed to
+  `{url, violations, passes: count, incomplete: count, inapplicable: count}` rather than
+  AxeBuilder's raw output, which turned out to be ~2MB *per test* of full rule metadata for every
+  check that *passed* — caught by actually inspecting a real report's JSON output, not assumed
+  small) plus a report annotation naming which rules failed, if any. Wrapped in try/catch so a
+  scan failure (page already closed/navigated during teardown) never changes the actual test's
+  pass/fail result. All 5 existing example specs (`smoke`, `theme-toggle`, `search-locators`,
+  `self-healing-demo`, `ai-healing-demo`) now import `test`/`expect` from this file instead of
+  `@playwright/test` directly, so accessibility scanning is on for the whole existing suite, not
+  opt-in per spec — matches "runs on every page under test" in REQUIREMENTS.md 3.7. Verified live
+  against playwright.dev via `--reporter=json`: the attachment appears in the run's report data,
+  correctly sized (~1.8KB, not ~2MB) after the trim.
+- `tests/visual-regression.spec.ts` + baseline
+  `tests/visual-regression.spec.ts-snapshots/hero-banner-chromium-linux.png` — Playwright's
+  native `toHaveScreenshot()` (REQUIREMENTS.md 3.6) against playwright.dev's hero banner, scoped
+  to that one element rather than a full-page shot (an external site's own unrelated content
+  shifting — nav, footer, anything ad-adjacent — would otherwise make a full-page baseline noisy
+  for reasons that have nothing to do with this framework). Baseline generated via `npx
+  playwright test tests/visual-regression.spec.ts --project=chromium --update-snapshots` and
+  committed; the update workflow itself is documented in `ARCHITECTURE.md`'s new "Quality
+  checks" section, satisfying PLAN.md's "update workflow documented" bullet.
+- **No new frontend/backend code for "surfaced in the app's report view"** — Phase 7's
+  `RunDetailPage` already embeds each run's full, self-contained Playwright HTML report via
+  `<iframe>`, and Playwright's own HTML reporter already renders test attachments (the
+  accessibility JSON) and screenshot pass/fail/diff images natively. Confirmed this is genuinely
+  sufficient rather than assumed: the `--reporter=json` check above shows the attachment lands on
+  the *test result* Phase 7's runner already captures into each run's `report/` directory, so
+  nothing about how that report gets served needed to change.
+- Left the two untracked, already-present `tests/aaqq.spec.ts` / `manifests/aaqq.json` files
+  alone — a real in-app-recorded test (not part of this framework's canonical example specs),
+  presumably created by you while trying the app; migrating its import or otherwise touching it
+  felt out of scope for a docs/test-infra phase and risked interfering with your own work.
+- `npx tsc --noEmit` (repo root) and `npx tsc -b` (`web/`) both clean. `npm run test:server`
+  unaffected (still 33/33 — no server code touched this phase). Full Playwright suite on
+  chromium: 7 passed (4 pre-existing specs + Phase 9's 2 AI-healing-demo tests + this session's
+  new visual-regression test) — the same 4 pre-existing junk-test failures from earlier sessions
+  (`aaa`, `aaqq`, `dddd`, `rfff.spec.ts`, all real recordings against real external sites like
+  Google/a shop site, all predating or unrelated to this session) are unchanged by this work.
+- `ARCHITECTURE.md` (the actual up-to-date "how pieces fit together" doc — `README.md` points
+  here, not `CLAUDE.md`) updated with a new "AI escalation (Phase 9)" subsection (carried over
+  from last session, written up properly here since it hadn't been documented there yet), a new
+  "Execution & reporting (Phase 7)" section, and a new "Quality checks (Phase 10)" section,
+  plus the repo-layout list and environment-variable reference extended for all of the above.
+  It had drifted stale since Phase 6 (never updated for Phase 7's real config/report route,
+  Phase 8's approve-actually-patches-files behavior, or Phase 9) — brought current as part of
+  this session rather than left for a dedicated pass, since it was directly relevant to what
+  shipped both this session and last. `CLAUDE.md`'s own stale "Architecture" section (flagged
+  last session) now points readers at `ARCHITECTURE.md` instead of `PROGRESS.md` for this.
+
+## Decisions & deviations from PLAN.md
+- **Accessibility violations don't fail tests** — PLAN.md's Phase 10 bullet just says checks
+  should run and results should show up; REQUIREMENTS.md 3.7 says "results shown in the app's
+  report view," not "the run fails on any violation." Since every example spec targets an
+  external site (playwright.dev) this framework doesn't own, auto-failing on that site's own
+  pre-existing a11y issues would make the demo suite red for reasons unrelated to this framework
+  — observational-only was the more defensible default. Worth revisiting once a real app-under-
+  test exists and the team decides whether a11y should be a hard gate for it.
+- **Accessibility scan output is trimmed before attaching**, not AxeBuilder's raw `analyze()`
+  result — see Completed above; this is a real bug-shaped finding (not a stylistic choice) caught
+  by actually checking attachment size, not assumed reasonable.
+- **Visual regression targets one scoped element (the hero banner), not a full page** — a
+  deliberate, documented deviation from the most literal reading of `toHaveScreenshot()` demos
+  (which are usually full-page), chosen specifically because the target is an external site this
+  session doesn't control content changes on.
+- **This session's own two doc-file changes went beyond Phase 10's literal scope** (`ARCHITECTURE.md`'s
+  Phase 7/8/9 sections predate this phase) — justified the same way last session's `CLAUDE.md`
+  patch was: directly relevant, previously flagged as stale, and small relative to the risk of
+  leaving the *only* accurate architecture reference silently wrong.
+
+## Open questions for the human
+- Same branch/commit question as every session since Phase 7 — your call on whether to split
+  Phase 9/10 onto separate branches (requires committing Phase 9 first) or treat this as one
+  combined chunk to commit together, same as Phase 7+8 before it.
+- `main` is now 6 phases behind (`feature/ai-healing` carries Phase 9+10) — same recurring open
+  item, one phase further along again.
+- Visual regression baseline is Linux/chromium-specific by filename
+  (`hero-banner-chromium-linux.png`) — if CI ever runs on a different OS than this dev sandbox,
+  the first run there will need its own baseline generated on that OS, not copied from here.
+- No accessibility/visual summary badge was added to the frontend (e.g. a violation count on
+  `RunDetailPage` outside of what's inside the embedded report iframe) — Phase 7's iframe already
+  shows everything Playwright's own reporter captures, so this was treated as sufficient for
+  Phase 10's "done when" bar rather than building a redundant second UI for the same data. Worth
+  a fresh look if violation counts ever need to be scannable without opening each run's report.
+- `tests/aaqq.spec.ts`/`manifests/aaqq.json` (see Status above) are sitting untracked in the
+  working tree — your call on whether to keep, delete, or `git add` them; not touched this
+  session.
+
+## Branch
+- `feature/ai-healing` — Phase 9 **and** Phase 10 (this session), branched from
+  `feature/webapp-execution`'s tip (`4c48185`). Ready for review; uncommitted.

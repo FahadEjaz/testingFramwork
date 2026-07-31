@@ -14,7 +14,13 @@ philosophy, `PLAN.md` for the phased build order, and `PROGRESS.md` for current 
   `generate-manifest.js` (manifest scaffolding), `apply-healing-patches.js` (commits a healed
   locator fix to its own branch after a test run).
 - `tests/support/resilient-locator.ts` — the locator wrapper tests call to get deterministic
-  fallback healing (see "Self-healing" below).
+  fallback healing, escalating to a scoped AI call if every fallback also fails (see
+  "Self-healing" below).
+- `tests/support/fixtures.ts` — the base `test`/`expect` every spec imports instead of
+  `@playwright/test` directly; adds an automatic accessibility scan per test (Phase 10, see
+  "Quality checks" below).
+- `scripts/lib/dom-context.js`, `scripts/lib/ai-heal-client.js` — the DOM-snippet extractor and
+  Claude Haiku client for Phase 9's AI healing escalation (see "Self-healing" below).
 - `server/` — Express/TypeScript backend API (Phase 4) + recording session infrastructure
   (Phase 6).
 - `web/` — Vite + React + TypeScript frontend (Phase 5).
@@ -98,7 +104,24 @@ make that file vanish from your working tree (it'd only exist on the new `auto/h
 branch). Commit your recorded test before relying on self-healing.
 
 Internal/dev-only tool now — the end-user-facing product replaces this git-branch/PR flow with
-an in-app Pending Fixes approve/reject queue (Phase 8).
+an in-app Pending Fixes approve/reject queue (Phase 8, see below): a run triggered through the
+web app queues fixes there directly instead of writing to `healing-events.jsonl` for this script
+to pick up later.
+
+### AI escalation (Phase 9)
+
+If every manifest fallback also fails, `resilientLocator` makes one scoped AI call before giving
+up: `scripts/lib/dom-context.js`'s `extractDomContext(page)` pulls a pruned snapshot of the
+page's interactive elements (never the full page HTML, never `<script>`/`<style>` contents,
+capped at 40 elements / 6000 characters), then `scripts/lib/ai-heal-client.js`'s
+`requestHealedLocator(...)` sends just that snippet + the old locator's definition to Claude
+Haiku (model configurable via `AI_HEAL_MODEL`) and parses its response into one manifest-shaped
+locator. Gated on `ANTHROPIC_API_KEY` — unset by default, in which case this step is a no-op
+(logs a warning, falls through to the original failure) rather than a crash. A successful AI
+heal logs `[AI-HEALED]` (with token counts) and is recorded with `source: 'ai'` instead of
+`'fallback'`, same event shape and same Pending Fixes queue as a deterministic heal. See
+`tests/ai-healing-demo.spec.ts` for a network-free worked example (the AI call itself is mocked
+there so it runs in CI with no API key needed).
 
 ## Backend API
 
@@ -118,16 +141,29 @@ npm run test:server                                              # node:test int
 - `GET/POST /api/tests`, `PATCH|DELETE /api/tests/:id` — test-case metadata (name + which
   `.spec.ts` it points at).
 - `POST /api/tests/:id/runs` — runs that spec via `npx playwright test --project=chromium
-  --reporter=json` and stores the structured result; `GET /api/tests/:id/runs` /
-  `GET /api/runs/:runId` read results back.
-- `GET /api/pending-fixes`, `PATCH /api/pending-fixes/:id` — the Pending Fixes storage
-  foundation for Phase 8's review queue; nothing populates it yet (Phase 2's healing pipeline
-  still logs to `healing-events.jsonl` until Phase 8 rewires it).
+  --config=playwright.execution.config.ts` (a separate config from `npm test`/CI's, forcing
+  `trace: 'on'`/`video: 'retain-on-failure'` and per-run output dirs — see "Execution &
+  reporting" below) and stores the structured result; capped at 2 concurrent runs (`429` beyond
+  that). `GET /api/tests/:id/runs` / `GET /api/runs/:runId` read results back.
+- `GET /api/runs/:runId/report/*` — serves that run's self-contained Playwright HTML report as
+  static files. Deliberately **unauthenticated** (mounted before `basicAuth`) — a browser
+  `<iframe>`/page load can't attach a custom `Authorization` header, so the run's own UUID (only
+  mintable via an authenticated `POST .../runs`) is the capability instead. Same accepted
+  tradeoff as the recording websocket below.
+- `GET /api/pending-fixes`, `PATCH /api/pending-fixes/:id` — the Pending Fixes review queue
+  (Phase 8). A run's self-healed locators (deterministic-fallback or, since Phase 9, AI-sourced)
+  queue here automatically; `PATCH .../:id` with `{status: 'approved'}` rewrites the manifest +
+  `.spec.ts` in place (reusing `scripts/lib/manifest.js`/`patch-spec-locator.js` — the same logic
+  `apply-healing-patches.js` uses, just written directly to disk instead of a git branch) so the
+  *next* run uses the healed locator as primary; `{status: 'rejected'}` is a pure status flip,
+  nothing on disk changes. Re-deciding an already-decided fix, or approving one whose manifest
+  entry is gone, returns `409`.
 - `POST /api/recordings`, `POST /api/recordings/:id/stop`, `POST /api/recordings/:id/save` —
   start/stop/save an in-app recording session (Phase 6). The live screencast/input channel
   itself is a websocket at `/ws/recordings/:id`, not a REST call.
 - All storage is JSON files under `server/data/` (gitignored, created on first write;
-  override with `DATA_DIR` for tests/scratch runs).
+  override with `DATA_DIR` for tests/scratch runs). No locking — last write wins on concurrent
+  writes to the same JSON file, an accepted limitation at this scale/single-shared-login stage.
 
 ## Recording session infrastructure (Phase 6)
 
@@ -145,6 +181,39 @@ npm run test:server                                              # node:test int
   WebSocket API can't set an Authorization header, so this trusts possession of the session id
   (a UUID returned only from the already-authenticated `POST /api/recordings`) as the
   capability — fine for a single-shared-login internal tool, would need revisiting otherwise.
+
+## Execution & reporting (Phase 7)
+
+`server/src/runner.ts`'s `runSpec()` shells out to Playwright asynchronously (non-blocking for
+the rest of the Node process) using `playwright.execution.config.ts` — a config used **only** by
+app-triggered runs, never `npm test`/CI, so trace/video capture (expensive) doesn't apply to
+every local/CI run. Output goes to `<DATA_DIR>/runs/<runId>/{test-results,report}/`, never the
+repo-root `test-results/`/`playwright-report/` dirs `npm test` uses. `server/src/execution/
+runManager.ts` caps concurrent app-triggered runs at 2 (same shape as the recording session
+cap). No artifact retention policy yet — every run's directory persists on disk indefinitely.
+
+## Quality checks (Phase 10)
+
+Both deterministic, no AI, and surfaced for free in the report view above — Playwright's own
+HTML reporter already renders test attachments and screenshot diffs, so nothing in `server/`
+or `web/` needed to change to show either.
+
+- **Accessibility** — `tests/support/fixtures.ts` extends the `page` fixture so every spec that
+  imports `test`/`expect` from it (all of them) gets an `@axe-core/playwright` scan of whatever
+  page state remains once the test body finishes. A violation never fails the test itself (a
+  target site's pre-existing a11y issues aren't this framework's to enforce) — results are
+  attached to the test's report entry as an `accessibility-scan` JSON attachment (trimmed to
+  `violations` + pass/incomplete/inapplicable counts, not the full multi-megabyte raw AxeBuilder
+  output) and, if there are violations, a report annotation naming which rules failed.
+- **Visual regression** — `tests/visual-regression.spec.ts` uses Playwright's native
+  `toHaveScreenshot()` against playwright.dev's hero banner (scoped to that one element, not a
+  full-page shot — an external site's own unrelated content changes would otherwise make the
+  baseline noisy). Baseline lives at `tests/visual-regression.spec.ts-snapshots/
+  hero-banner-chromium-linux.png`. **To intentionally update it** after a real visual change:
+  `npx playwright test tests/visual-regression.spec.ts --project=chromium --update-snapshots`,
+  review the new PNG like any other diff, and commit it. Baselines are OS/browser-version
+  specific by nature (Playwright names the file `<name>-<project>-<platform>.png`) — regenerate
+  on whatever OS actually runs your CI if you see spurious diffs there.
 
 ## Frontend
 
@@ -167,6 +236,13 @@ Needs the backend running (`npm run server:start` from the repo root) to show re
   `http://127.0.0.1:4000`.
 - `HEALING_LOG_PATH` — where self-healing events are logged during a test run. Default
   `test-results/healing-events.jsonl`.
+- `ANTHROPIC_API_KEY` — required for Phase 9's AI healing escalation to actually call the model;
+  unset by default anywhere in this repo, in which case that step is a no-op (falls straight
+  through to the original test failure, no crash).
+- `AI_HEAL_MODEL` — which Claude model the AI healing escalation calls. Default
+  `claude-haiku-4-5-20251001`.
+- `PW_RUN_OUTPUT_DIR`, `PW_RUN_REPORT_DIR` — per-run artifact directories, set internally by
+  `server/src/runner.ts` for each app-triggered run; not meant to be set by hand.
 - `BASE_URL` — base URL of the app under test for the example specs. Unset by default; the
   example specs target playwright.dev directly since no real app under test is wired up yet.
 - `CI` — set automatically by GitHub Actions; enables retries and disables `test.only` locally

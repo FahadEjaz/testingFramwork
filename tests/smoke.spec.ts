@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/fixtures';
 import { PlaywrightHomePage } from './pages/PlaywrightHomePage';
 
 // Phase 0 scaffolding proof: a trivial recorded-style test with a Page Object,

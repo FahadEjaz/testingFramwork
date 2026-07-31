@@ -99,9 +99,13 @@ function createTestsRouter({
       // Deterministic fallback-healing during this run (Phase 2's resolver, reused as-is) queues
       // a Pending Fix per healed element instead of the old git-branch/PR flow — see PLAN.md
       // Phase 8. The run that triggered it already used the healed locator, so it doesn't fail.
-      if (outcome.healingEvents.length > 0) {
-        pendingFixesStore.recordHealing(test.id, outcome.healingEvents, 'fallback');
-      }
+      // A single run can contain both fallback- and AI-sourced events (Phase 9: AI only kicks in
+      // per-element, after that element's own fallbacks are exhausted), so split by source before
+      // queuing rather than assuming one source for the whole batch.
+      const fallbackEvents = outcome.healingEvents.filter((e) => e.source === 'fallback');
+      const aiEvents = outcome.healingEvents.filter((e) => e.source === 'ai');
+      if (fallbackEvents.length > 0) pendingFixesStore.recordHealing(test.id, fallbackEvents, 'fallback');
+      if (aiEvents.length > 0) pendingFixesStore.recordHealing(test.id, aiEvents, 'ai');
       res.status(201).json(run);
     } finally {
       runManager.finish();

@@ -20,6 +20,18 @@ const healingEvent = {
   oldPrimary: { strategy: 'css', value: '.old' },
   newPrimary: { strategy: 'role', role: 'button', name: 'Submit' },
   fallbackIndex: 0,
+  source: 'fallback',
+  timestamp: new Date().toISOString(),
+};
+
+const aiHealingEvent = {
+  spec: 'tests/smoke.spec.ts',
+  elementKey: 'cancel',
+  oldPrimary: { strategy: 'css', value: '.old-cancel' },
+  newPrimary: { strategy: 'text', value: 'Cancel' },
+  fallbackIndex: -1,
+  source: 'ai',
+  tokensUsed: { inputTokens: 250, outputTokens: 12 },
   timestamp: new Date().toISOString(),
 };
 
@@ -91,6 +103,46 @@ test(
 
     const fixes: any = await (await fetch(`${baseUrl}/api/pending-fixes`, { headers: jsonHeaders })).json();
     assert.equal(fixes.length, 1);
+  })
+);
+
+test(
+  'an AI-sourced healing event queues a Pending Fix marked ai with token usage',
+  withServer(fakeRunSpec([aiHealingEvent]), async ({ baseUrl }) => {
+    const created: any = await (
+      await fetch(`${baseUrl}/api/tests`, {
+        method: 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify({ name: 'Smoke', specPath: 'tests/smoke.spec.ts' }),
+      })
+    ).json();
+
+    await fetch(`${baseUrl}/api/tests/${created.id}/runs`, { method: 'POST', headers: jsonHeaders });
+
+    const fixes: any = await (await fetch(`${baseUrl}/api/pending-fixes`, { headers: jsonHeaders })).json();
+    assert.equal(fixes.length, 1);
+    assert.equal(fixes[0].source, 'ai');
+    assert.deepEqual(fixes[0].tokensUsed, aiHealingEvent.tokensUsed);
+  })
+);
+
+test(
+  'a run with both fallback- and AI-sourced events queues one Pending Fix per source',
+  withServer(fakeRunSpec([healingEvent, aiHealingEvent]), async ({ baseUrl }) => {
+    const created: any = await (
+      await fetch(`${baseUrl}/api/tests`, {
+        method: 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify({ name: 'Smoke', specPath: 'tests/smoke.spec.ts' }),
+      })
+    ).json();
+
+    await fetch(`${baseUrl}/api/tests/${created.id}/runs`, { method: 'POST', headers: jsonHeaders });
+
+    const fixes: any = await (await fetch(`${baseUrl}/api/pending-fixes`, { headers: jsonHeaders })).json();
+    assert.equal(fixes.length, 2);
+    const sources = fixes.map((f: any) => f.source).sort();
+    assert.deepEqual(sources, ['ai', 'fallback']);
   })
 );
 

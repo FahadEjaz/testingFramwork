@@ -1,0 +1,12 @@
+{
+  "spec": "tests/ai-healing-demo.spec.ts",
+  "elements": {
+    "confirmButton": {
+      "primary": { "strategy": "css", "value": ".this-does-not-exist" },
+      "fallbacks": [
+        { "strategy": "css", "value": ".also-does-not-exist" },
+        { "strategy": "text", "value": "Nonexistent Text" }
+      ]
+    }
+  }
+}

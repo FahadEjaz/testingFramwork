@@ -42,11 +42,19 @@ export function RunDetailPage() {
           <div className={styles.list}>
             {run.healingEvents.map((event, i) => (
               <div className={styles.card} key={i}>
-                <div className={styles.cardTitle}>{event.elementKey}</div>
+                <div className={styles.cardTop}>
+                  <div className={styles.cardTitle}>{event.elementKey}</div>
+                  <StatusLamp tone="healed" label={event.source === 'ai' ? 'AI-healed' : 'Fallback-healed'} />
+                </div>
                 <div className={styles.diff}>
                   <span className={styles.diffOld}>− {formatLocator(event.oldPrimary)}</span>
                   <span className={styles.diffNew}>+ {formatLocator(event.newPrimary)}</span>
                 </div>
+                {event.tokensUsed && (
+                  <div className={styles.tokens}>
+                    {event.tokensUsed.inputTokens} in / {event.tokensUsed.outputTokens} out tokens
+                  </div>
+                )}
               </div>
             ))}
           </div>

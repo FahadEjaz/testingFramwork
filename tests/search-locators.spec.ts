@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/fixtures';
 
 // Recorded-style test (raw locators, no Page Object) exercising the DocSearch modal — validates
 // the manifest schema/generator against a mix of role (button/searchbox/link) and heading locators.

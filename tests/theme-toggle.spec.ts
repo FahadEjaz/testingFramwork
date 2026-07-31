@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/fixtures';
 
 // Recorded-style test (raw locators, no Page Object) exercising the nav bar's theme toggle —
 // validates the manifest schema/generator against a role locator with no fixed accessible name

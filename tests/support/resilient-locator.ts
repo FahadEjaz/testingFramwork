@@ -4,6 +4,13 @@ import * as fs from 'fs';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { loadManifestForSpec, buildLocatorFromEntry } = require('../../scripts/lib/manifest');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { extractDomContext } = require('../../scripts/lib/dom-context');
+// Referenced as a module namespace (not destructured) so tests can monkey-patch
+// aiHealClient.requestHealedLocator with a fake before exercising this file, the same way
+// scripts/lib/ai-heal-client.js's own deps.client seam lets its unit tests avoid a real API call.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const aiHealClient = require('../../scripts/lib/ai-heal-client');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const healingLogPath = process.env.HEALING_LOG_PATH ?? path.join(repoRoot, 'test-results', 'healing-events.jsonl');
@@ -54,6 +61,7 @@ export async function resilientLocator(
             oldPrimary: entry.primary,
             newPrimary: fallbackEntry,
             fallbackIndex: i,
+            source: 'fallback',
             timestamp: new Date().toISOString(),
           });
         } catch (logError) {
@@ -64,6 +72,45 @@ export async function resilientLocator(
         // this fallback didn't resolve either — try the next one.
       }
     }
+
+    // Step 4 (REQUIREMENTS.md 3.3): every deterministic fallback failed — one scoped AI call,
+    // only on this failure path, never on a normal run. Best-effort: missing API key, a network
+    // error, a malformed AI response, or the AI's own candidate still not resolving all fall
+    // through to the original failure below rather than changing how the test fails.
+    try {
+      const domContext = await extractDomContext(page);
+      const { entry: aiEntry, usage } = await aiHealClient.requestHealedLocator({
+        elementKey,
+        oldPrimary: entry.primary,
+        domContext,
+      });
+      const candidate = buildLocatorFromEntry(page, aiEntry);
+      await candidate.waitFor({ state: 'visible', timeout: timeoutMs });
+
+      console.log(
+        `[AI-HEALED] spec=${specRelativePath} element=${elementKey} strategy=${aiEntry.strategy} ` +
+        `— every fallback failed, AI proposed a fix (tokens: in=${usage.inputTokens} out=${usage.outputTokens})`
+      );
+      try {
+        recordHealingEvent({
+          spec: specRelativePath,
+          elementKey,
+          oldPrimary: entry.primary,
+          newPrimary: aiEntry,
+          // No existing fallback slot to demote — this locator didn't come from the manifest.
+          fallbackIndex: -1,
+          source: 'ai',
+          tokensUsed: usage,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (logError) {
+        console.warn(`Failed to record AI healing event (healing still applied): ${logError}`);
+      }
+      return candidate;
+    } catch (aiError) {
+      console.warn(`AI healing escalation did not resolve ${specRelativePath}::${elementKey}: ${aiError}`);
+    }
+
     throw primaryError;
   }
 }

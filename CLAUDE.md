@@ -65,7 +65,10 @@ There is no separate lint/typecheck script yet; `tsc` types are enforced implici
 `ts-node`/Playwright's TS loader at test-run time. `BASE_URL` env var is unset by default — all
 example specs (`tests/smoke.spec.ts`, `tests/theme-toggle.spec.ts`,
 `tests/search-locators.spec.ts`) target playwright.dev directly since no real app under test is
-wired up yet.
+wired up yet. `ANTHROPIC_API_KEY` (required) and `AI_HEAL_MODEL` (optional, defaults to
+`claude-haiku-4-5-20251001`) gate Phase 9's AI healing escalation — unset in dev/CI by default,
+so that failure path is a no-op (falls straight through to the original test failure) unless
+explicitly configured.
 
 ## Core philosophy (from REQUIREMENTS.md — non-negotiable)
 
@@ -126,7 +129,12 @@ Existing (Phase 0 + Phase 1 + Phase 2):
   primaryFactory)`. Manifest is untouched on the normal path; only read after the primary
   locator fails, then each fallback is tried in order (no AI). Logs `[SELF-HEALED]` and appends
   to `test-results/healing-events.jsonl` (`HEALING_LOG_PATH` env var overrides the path) on
-  success; rethrows the original error if every fallback also fails.
+  success. If every fallback also fails, falls through to Phase 9's AI escalation
+  (`scripts/lib/dom-context.js`'s `extractDomContext` + `scripts/lib/ai-heal-client.js`'s
+  `requestHealedLocator`, a single scoped Claude Haiku call gated on `ANTHROPIC_API_KEY` —
+  logs `[AI-HEALED]` on success) before rethrowing the original error as a last resort. Both
+  paths tag their `healing-events.jsonl` entry with `source: 'fallback'|'ai'`; AI events also
+  carry `tokensUsed`.
 - `scripts/apply-healing-patches.js` — reads `healing-events.jsonl`, patches the manifest
   (promotes the working fallback to `primary`) and the `.spec.ts` (via
   `scripts/lib/patch-spec-locator.js`, a TS-compiler-API-based rewrite of just the
@@ -143,14 +151,17 @@ Existing (Phase 0 + Phase 1 + Phase 2):
 
 Not yet built (later phases per PLAN.md) — do not assume these exist:
 
-- AI escalation (Phase 3) — the scoped-context extractor, the model call, and the
-  cost/usage log line. Nothing in the codebase calls an AI model anywhere yet.
 - Automatic `git push`/PR creation for a healed branch — `apply-healing-patches.js` stops at a
   local commit by design; pushing/opening the PR is a documented manual (or future CI) step.
-- `@axe-core/playwright` accessibility checks and `toHaveScreenshot()` baselines (Phase 4).
+- `@axe-core/playwright` accessibility checks and `toHaveScreenshot()` baselines (Phase 10).
+
+> This "Architecture" section still only describes Phases 0-2 (the CLI/git engine) — it has not
+> been updated for the `server/`+`web/` web-app pivot (Phases 4-10, all built). `ARCHITECTURE.md`
+> (repo root) is the up-to-date reference for `server/`/`web/` — read that instead of this
+> section until this one is rewritten to match.
 
 Self-healing pipeline, in order, per REQUIREMENTS.md 3.3 (steps 1-3 implemented in Phase 2,
-step 4 is Phase 3):
+step 4 in Phase 9):
 1. Test runs normally — no AI.
 2. On locator failure, try each manifest fallback in order — no AI.
 3. If a fallback works, auto-patch the `.spec.ts` + manifest and open a PR on a dedicated
