@@ -121,7 +121,47 @@ locator. Gated on `ANTHROPIC_API_KEY` — unset by default, in which case this s
 heal logs `[AI-HEALED]` (with token counts) and is recorded with `source: 'ai'` instead of
 `'fallback'`, same event shape and same Pending Fixes queue as a deterministic heal. See
 `tests/ai-healing-demo.spec.ts` for a network-free worked example (the AI call itself is mocked
-there so it runs in CI with no API key needed).
+there so it runs in CI with no API key needed). Aggregated spend across every AI heal ever
+queued is readable at `GET /api/ai-usage` and on the Pending Fixes page (Phase 11).
+
+### Security review: what actually reaches the AI model (Phase 11)
+
+REQUIREMENTS.md 4 is explicit: no secrets/credentials/PII are ever sent to the AI model. This
+was audited end to end this phase — here's exactly what does and doesn't cross that boundary:
+
+- **The only AI call site in the codebase** is `scripts/lib/ai-heal-client.js`'s
+  `requestHealedLocator()`, reached only from `resilientLocator`'s step 4, only after every
+  manifest fallback has already failed. Nothing else in this project calls a model.
+- **What it sends:** the failed element's `elementKey` (a developer-chosen manifest key, not
+  user data), the old locator's definition (`oldPrimary` — comes from the manifest, which can
+  contain real page text for `text`/`role` `name` strategies), and `extractDomContext()`'s pruned
+  snapshot (a fixed attribute allow-list, 80-char text max, 40 elements/6000 chars max — see
+  "AI escalation" above). Deliberately excluded from that allow-list: any element's `value`
+  attribute — the one place a typed password/PII would most obviously sit.
+- **Redaction (`scripts/lib/redact.js`):** since a `text`/`role`-name locator or an element's
+  visible text can still legitimately *be* page content (e.g. "Welcome, jane@example.com"),
+  every string is passed through a pattern-based redactor before it leaves the process — applied
+  twice, once inside `extractDomContext` at the source and once more over the whole assembled
+  prompt in `requestHealedLocator` as a last-mile check (so `oldPrimary`, which doesn't go
+  through `dom-context.js`, is covered too). Catches: email addresses, JWT-shaped tokens,
+  `Bearer <token>` strings, long (24+ char) opaque alphanumeric strings with a digit (session
+  ids/API keys/CSRF tokens in URLs), and credit-card-shaped digit runs. This is a best-effort
+  pattern filter, not a guarantee against every possible PII shape a page could display — see
+  Open questions in `PROGRESS.md`'s Phase 11 entry.
+- **The recording session's streamed browser view (Phase 6) never touches the AI path at all** —
+  it's a completely separate data flow. `RecordingSession` keeps only the single most-recent
+  screencast frame in memory (`lastFrame`, for replay to a newly-attached websocket listener) and
+  never writes any frame to disk or sends one anywhere except the operator's own authenticated
+  websocket connection. Confirmed by reading `session.ts` in full this phase, not assumed.
+- **A separate, non-AI risk that this audit surfaced and did *not* try to fix:** a recorded
+  `fill`/`selectOption` action's literal typed value is baked verbatim into the generated
+  `.spec.ts` (`codegen.ts`) — by design, since replaying a login/search flow needs the real
+  value. If an operator types a real password while recording, that password ends up in a
+  plaintext file on disk (and in git history, once committed). This is standard practice for any
+  record-and-replay test tool (the same is true of raw `npx playwright codegen`) and is out of
+  scope to "fix" without breaking replay — mitigated with an in-app warning instead (`web/src/
+  pages/RecordPage.tsx`, shown before recording starts) telling the operator not to type real
+  credentials/personal data.
 
 ## Backend API
 

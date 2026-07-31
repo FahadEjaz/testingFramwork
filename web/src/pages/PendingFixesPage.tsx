@@ -1,22 +1,24 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ApiError, listPendingFixes, updatePendingFix } from '../api';
+import { ApiError, getAiUsage, listPendingFixes, updatePendingFix } from '../api';
 import { useAuth } from '../auth/AuthContext';
 import { StatusLamp } from '../components/StatusLamp';
 import { formatLocator } from '../lib/runStatus';
 import { usePendingFixesCount } from '../state/PendingFixesCountContext';
-import type { PendingFix } from '../types';
+import type { AiUsageSummary, PendingFix } from '../types';
 import styles from './PendingFixesPage.module.css';
 
 export function PendingFixesPage() {
   const { credentials } = useAuth();
   const { refresh: refreshCount } = usePendingFixesCount();
   const [fixes, setFixes] = useState<PendingFix[] | null>(null);
+  const [aiUsage, setAiUsage] = useState<AiUsageSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   function reload() {
     if (!credentials) return;
     listPendingFixes(credentials, 'pending').then(setFixes);
+    getAiUsage(credentials).then(setAiUsage);
   }
 
   useEffect(reload, [credentials]);
@@ -38,6 +40,14 @@ export function PendingFixesPage() {
   return (
     <div>
       <h1>Pending Fixes</h1>
+
+      {aiUsage && aiUsage.totalHeals > 0 && (
+        <div className={styles.usageSummary}>
+          AI healing spend to date: {aiUsage.totalHeals} heal{aiUsage.totalHeals === 1 ? '' : 's'} ·{' '}
+          {aiUsage.totalInputTokens.toLocaleString()} input / {aiUsage.totalOutputTokens.toLocaleString()} output
+          tokens
+        </div>
+      )}
 
       {error && <p className={styles.error}>{error}</p>}
 

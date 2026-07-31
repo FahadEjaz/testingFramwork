@@ -2,7 +2,7 @@
 // credentials; a 401 means they're stale/wrong, which the caller surfaces by logging out.
 import type { Credentials } from './auth/credentials';
 import { authHeader } from './auth/credentials';
-import type { PendingFix, PendingFixStatus, RecordedAction, Run, TestCase } from './types';
+import type { AiUsageSummary, PendingFix, PendingFixStatus, RecordedAction, Run, TestCase } from './types';
 
 export class ApiError extends Error {
   status: number;
@@ -75,6 +75,10 @@ export function reportUrl(runId: string): string {
 export function listPendingFixes(credentials: Credentials, status?: PendingFixStatus): Promise<PendingFix[]> {
   const query = status ? `?status=${status}` : '';
   return request<PendingFix[]>(credentials, `/api/pending-fixes${query}`);
+}
+
+export function getAiUsage(credentials: Credentials): Promise<AiUsageSummary> {
+  return request<AiUsageSummary>(credentials, '/api/ai-usage');
 }
 
 export function updatePendingFix(

@@ -65,6 +65,12 @@ export interface PendingFix {
   updatedAt: string;
 }
 
+export interface AiUsageSummary {
+  totalHeals: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+}
+
 export interface LocatorCandidate {
   strategy: 'role' | 'testId' | 'css' | 'text' | 'label' | 'placeholder';
   role?: string;

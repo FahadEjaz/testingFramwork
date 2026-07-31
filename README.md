@@ -1,10 +1,11 @@
 # Testing Framework V2
 
 Playwright-based E2E testing framework where AI is used only as a failure-path exception
-handler — never as a per-run participant. See `REQUIREMENTS.md` for the non-negotiable
-philosophy, `PLAN.md` for the phased build order, `PROGRESS.md` for current status, and
-`ARCHITECTURE.md` for how the pieces fit together (repo layout, recording, self-healing, API,
-frontend, full environment variable reference).
+handler — never as a per-run participant. New to the project? Start with `HANDOFF.md` — a
+walkthrough of the whole platform (end-user flow + how it's built) in one document. For deeper
+detail: `REQUIREMENTS.md` for the non-negotiable philosophy, `PLAN.md` for the phased build
+order, `PROGRESS.md` for current status, and `ARCHITECTURE.md` for how the pieces fit together
+(repo layout, recording, self-healing, API, frontend, full environment variable reference).
 
 ## Setup
 

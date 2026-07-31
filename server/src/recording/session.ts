@@ -96,8 +96,26 @@ class RecordingSession {
     this.status = 'live';
   }
 
-  async dispatchMouseEvent(params: { type: string; x: number; y: number; button?: string }): Promise<void> {
+  async dispatchMouseEvent(params: {
+    type: string;
+    x: number;
+    y: number;
+    button?: string;
+    deltaX?: number;
+    deltaY?: number;
+  }): Promise<void> {
     this.lastActivityAt = Date.now();
+    if (params.type === 'mouseWheel') {
+      // Scrolling has no button/clickCount — CDP wants deltaX/deltaY instead.
+      await this.cdp.send('Input.dispatchMouseEvent', {
+        type: 'mouseWheel',
+        x: params.x,
+        y: params.y,
+        deltaX: params.deltaX ?? 0,
+        deltaY: params.deltaY ?? 0,
+      });
+      return;
+    }
     await this.cdp.send('Input.dispatchMouseEvent', {
       type: params.type,
       x: params.x,

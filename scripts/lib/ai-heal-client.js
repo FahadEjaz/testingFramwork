@@ -2,6 +2,8 @@
 // called on a passing run, never called until every deterministic fallback in the manifest has
 // already failed. Gets only the failed locator's old definition + a pruned DOM snippet
 // (scripts/lib/dom-context.js) — never the full page, never secrets/credentials/PII.
+const { redactSecrets } = require('./redact');
+
 const VALID_STRATEGIES = ['role', 'testId', 'css', 'text', 'label', 'placeholder'];
 const DEFAULT_MODEL = process.env.AI_HEAL_MODEL || 'claude-haiku-4-5-20251001';
 
@@ -11,7 +13,7 @@ async function requestHealedLocator({ elementKey, oldPrimary, domContext }, deps
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const client = deps.client ?? createDefaultClient(apiKey);
 
-  const prompt =
+  const rawPrompt =
     `A Playwright locator broke for element "${elementKey}". Its previous (now-failing) ` +
     `definition was:\n${JSON.stringify(oldPrimary)}\n\n` +
     'Here is a pruned snapshot of the current page\'s interactive elements — a JSON array of ' +
@@ -20,6 +22,13 @@ async function requestHealedLocator({ elementKey, oldPrimary, domContext }, deps
     'prose, no markdown fences. Shape must be exactly one of:\n' +
     '{"strategy":"role","role":"<aria role>","name":"<accessible name>"}\n' +
     '{"strategy":"testId"|"css"|"text"|"label"|"placeholder","value":"<locator value>"}';
+
+  // Last-mile redaction pass over the *whole* assembled prompt — domContext is already redacted
+  // at its own source (scripts/lib/dom-context.js), but oldPrimary comes straight from the
+  // manifest (e.g. a `text`-strategy locator's literal page content) and hasn't been filtered
+  // yet. REQUIREMENTS.md 4: "no secrets/credentials/PII are ever sent to the AI model" — this is
+  // the final point before anything actually leaves the process.
+  const prompt = redactSecrets(rawPrompt);
 
   const response = await client.messages.create({
     model: DEFAULT_MODEL,

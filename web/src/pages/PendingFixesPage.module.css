@@ -1,3 +1,9 @@
+.usageSummary {
+  font-size: 13px;
+  color: var(--slate);
+  margin-top: 8px;
+}
+
 .list {
   display: flex;
   flex-direction: column;

@@ -63,6 +63,24 @@ function createPendingFixesRouter({ repoRoot, pendingFixesStore }: PendingFixesR
     res.json(pendingFixesStore.list(status as PendingFixStatus | undefined));
   });
 
+  // Aggregated AI-healing token spend across every fix ever queued (any status) — Phase 9's
+  // per-fix tokensUsed is only ever visible one fix at a time otherwise; REQUIREMENTS.md
+  // 3.4/Phase 11's "confirm token/cost logging is aggregated somewhere readable" bar.
+  router.get('/ai-usage', (_req: Request, res: Response) => {
+    const totals = pendingFixesStore
+      .list()
+      .filter((fix) => fix.source === 'ai')
+      .reduce(
+        (acc, fix) => ({
+          totalHeals: acc.totalHeals + 1,
+          totalInputTokens: acc.totalInputTokens + (fix.tokensUsed?.inputTokens ?? 0),
+          totalOutputTokens: acc.totalOutputTokens + (fix.tokensUsed?.outputTokens ?? 0),
+        }),
+        { totalHeals: 0, totalInputTokens: 0, totalOutputTokens: 0 }
+      );
+    res.json(totals);
+  });
+
   router.patch('/pending-fixes/:id', (req: Request<{ id: string }>, res: Response) => {
     const { status } = req.body ?? {};
     if (status !== 'approved' && status !== 'rejected') {

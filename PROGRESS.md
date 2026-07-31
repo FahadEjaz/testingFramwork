@@ -5,23 +5,28 @@
 > check here before re-reading REQUIREMENTS.md or PLAN.md in full.
 
 ## Current phase
-Phase 10 — Quality add-ons (accessibility + visual regression)
+Phase 11 — Hardening & handoff docs *(the last phase in PLAN.md)*
 
 ## Status
-Ready for review, still on `feature/ai-healing` (uncommitted) — **same deviation as the Phase 8
-session**: Phase 10 was built directly on top of Phase 9's still-uncommitted changes on the same
-branch, since there was no clean commit yet to cut a fresh `feature/quality-checks` branch from.
-If you want clean phase-per-branch history: commit Phase 9's files first on `feature/ai-healing`,
-and Phase 10's files can move onto a fresh branch from that commit; otherwise both phases' diffs
-are sitting together right now (see Branch section for the file split). Note also two untracked
-files in the working tree that are **not** part of either phase and were left untouched:
-`tests/aaqq.spec.ts` + `manifests/aaqq.json` — a real recording made through the app's own
-recorder (Phase 6), presumably yours from testing the app; not migrated to the new `fixtures.ts`
-import (see Decisions) since it isn't one of this repo's canonical example specs.
+Ready for review, still on `feature/ai-healing` (uncommitted) — **same deviation as Phase 8/10**:
+Phases 9, 10, and 11 are all sitting uncommitted together on this one branch, since there was
+never a clean commit to cut a fresh `feature/hardening` branch from. If you want clean
+phase-per-branch history, commit what's here first, then later phases (there are none left in
+PLAN.md, but any future work) can branch cleanly from that. Otherwise all three phases' diffs are
+sitting together right now (see Branch section for the file split).
 
-Phase 8/9 branch history: Phase 8 is committed (`4c48185` "Phase 8 done", `feature/webapp-
-execution`'s tip); Phase 9 was built on a fresh `feature/ai-healing` branch cut from that commit
-but is itself still uncommitted going into this session.
+**This is the last phase PLAN.md defines.** Phases 0-11 are now all built (0-2 and 4-8 committed
+across various branches per their own PROGRESS.md entries above; 9-11 uncommitted on
+`feature/ai-healing`). What's left is entirely human calls: review/commit/merge this branch,
+decide whether/when to bring `main` current, and whatever comes after PLAN.md's documented
+"Future / deferred" list if the project continues.
+
+Note also two untracked files in the working tree, unrelated to any phase and left untouched
+again this session: `tests/aaqq.spec.ts` + `manifests/aaqq.json` (a real in-app recording,
+presumably yours from testing the app). Several other untracked junk specs (`aaa`/`dddd`/`rfff`/
+`rrr.spec.ts` and matching manifests) have also appeared/changed across sessions — all real
+recordings against real external sites, all pre-existing or created outside this work, none
+touched by any phase in this log.
 
 ## What changed this session (the pivot)
 - User tried the Phase 1 zenity-based recorder and the CLI run instructions from a remote/
@@ -986,5 +991,103 @@ memory/notes rather than trusting my reconstruction blindly.
   session.
 
 ## Branch
-- `feature/ai-healing` — Phase 9 **and** Phase 10 (this session), branched from
+- `feature/ai-healing` — Phase 9, Phase 10, **and** Phase 11 (see next entry), branched from
+  `feature/webapp-execution`'s tip (`4c48185`). Ready for review; uncommitted.
+
+---
+
+## Phase 11 session — Hardening & handoff docs
+
+## Completed this session
+- **Security review of everything sent to the AI model** (PLAN.md's first Phase 11 bullet).
+  Traced the one AI call site in the codebase (`scripts/lib/ai-heal-client.js`'s
+  `requestHealedLocator`, reached only from `resilient-locator.ts`'s step 4) end to end and wrote
+  up exactly what does/doesn't cross that boundary in `ARCHITECTURE.md`'s new "Security review"
+  subsection. Findings and fixes:
+  - The DOM extractor already excluded the one clearest leak vector (an element's `value`
+    attribute, i.e. anything typed into a form field) — confirmed, no change needed there.
+  - A `text`/`role`-name manifest locator, and the DOM snapshot's own `text`/`href`/`aria-label`
+    fields, can legitimately contain real page content (a displayed email, a token embedded in a
+    link's query string, etc.) — this was a real gap, not previously mitigated. Added
+    `scripts/lib/redact.js`: a pattern-based redactor (emails, JWT-shaped tokens, `Bearer `
+    tokens, long opaque alphanumeric strings with a digit, credit-card-shaped digit runs), wired
+    in twice — once inside `extractDomContext` at the source, once more over the whole assembled
+    prompt in `requestHealedLocator` as a last-mile check (catching `oldPrimary`, which doesn't
+    flow through `dom-context.js` at all). 7 unit tests (`server/test/redact.test.ts`) plus 2 new
+    `aiHealClient.test.ts` cases that capture the literal prompt text sent to a fake client and
+    assert an email/token never appears in it — verifying the actual egress point, not just the
+    redaction function in isolation.
+  - Confirmed (by reading `session.ts` in full, not assumed) that the recording session's
+    streamed browser view never touches the AI path or disk at all — only the single most-recent
+    screencast frame is ever buffered (in memory, for websocket-reconnect replay), matching
+    REQUIREMENTS.md 4's "must not leak ... into anything persisted or sent to a model."
+  - Surfaced, but explicitly did **not** try to "fix," a separate non-AI risk this audit turned
+    up: a recorded `fill` action's literal typed value is baked verbatim into the generated
+    `.spec.ts` by design (replaying a login/search flow needs the real value) — if an operator
+    types a real password while recording, it ends up in a plaintext file. This is standard for
+    any record-and-replay tool (same as raw `playwright codegen`) and isn't something to silently
+    "fix" without breaking replay; mitigated instead with an in-app warning
+    (`web/src/pages/RecordPage.tsx`, shown before recording starts) telling the operator not to
+    type real credentials/personal data.
+- **Confirmed and finished Phase 9's token/cost logging aggregation** (PLAN.md's third Phase 11
+  bullet — it existed only per-fix/per-run before this session, never summed anywhere). Added
+  `GET /api/ai-usage` (`server/src/routes/pendingFixes.ts`) — sums `tokensUsed` across every
+  `source: 'ai'` fix ever queued, any status (so a rejected AI heal's cost still counts — you
+  spent the tokens regardless of the review outcome). Surfaced on the Pending Fixes page as a
+  small summary line ("AI healing spend to date: N heals · X input / Y output tokens"), only
+  shown once at least one AI heal has happened. New test
+  (`healingToPendingFixes.test.ts`) explicitly proves aggregation survives a fix being
+  decided (rejected), not just "sum of currently-pending fixes."
+- **Wrote `HANDOFF.md`** (PLAN.md's second Phase 11 bullet — "how this platform works," record →
+  run → report → pending fixes → optional AI escalation, for both the non-technical end-user flow
+  and whoever maintains the engine). Linked from `README.md` as the recommended starting point
+  for anyone new to the project, ahead of `REQUIREMENTS.md`/`PLAN.md`/`PROGRESS.md`/
+  `ARCHITECTURE.md`. Structured as: one-paragraph summary → step-by-step end-user walkthrough →
+  a short "under the hood" section for maintainers → pointers to the more detailed docs → a
+  one-paragraph "where things stand today" pointing at `PROGRESS.md` for specifics, deliberately
+  not duplicating the phase-by-phase detail that already lives there (so this doc doesn't itself
+  start going stale the next time a phase ships).
+- `npx tsc --noEmit` (repo root) and `npx tsc -b` (`web/`) both clean. `npm run test:server`: 43
+  tests passing (33 from Phases 4-9 + 10 new this session). Full Playwright suite on chromium:
+  8 passed this run (this repo's 7 owned specs, plus one of the untracked junk specs that
+  happened to pass against its live external target this run — see Status above) — no change in
+  behavior for anything this session touched.
+
+## Decisions & deviations from PLAN.md
+- **Redaction is pattern-based, not a call to any PII-detection service** — keeps the AI
+  escalation path itself free of a second external dependency/cost on the failure path, matches
+  REQUIREMENTS.md's "no vendor lock-in" framing, and is fast enough to run inline with no
+  measurable latency added. Documented as best-effort, not a guarantee, in both
+  `scripts/lib/redact.js`'s own comment and `ARCHITECTURE.md`.
+- **The recorded-credential risk (see Completed above) was mitigated with a UI warning, not
+  fixed at the data layer** — deliberately, since there's no way to redact a recorded `fill`
+  value without breaking the test's ability to replay that exact flow. Flagging clearly beats a
+  half-solution that silently breaks recordings of real login/search flows.
+- **`/api/ai-usage` reads `pendingFixesStore.list()` (no status filter) rather than adding a
+  separate running counter/store** — the existing store already has every fix, decided or not;
+  a separate counter would be one more place for the two numbers to drift apart.
+- **`HANDOFF.md` is a new top-level file, not a section added to `README.md` or
+  `ARCHITECTURE.md`** — it has a genuinely different audience/purpose (a narrative walkthrough
+  for someone brand new, vs. `README.md`'s quick-setup commands and `ARCHITECTURE.md`'s technical
+  reference), and PLAN.md's Phase 11 bullet asks for a document a newcomer can read standalone.
+
+## Open questions for the human
+- **Redaction is best-effort, not exhaustive** (see Decisions) — a page could still display PII
+  in a shape none of the current patterns catch (e.g. a phone number, a physical address, a name
+  with no other distinguishing marker). Worth revisiting if this is ever used against a real app
+  with genuine user PII on-screen, rather than the current playwright.dev demo target.
+- Same branch/commit question as every session since Phase 7 — now three phases (9, 10, 11) deep
+  on one uncommitted branch. Your call on how to split this into commits/branches, or whether to
+  treat it as one combined chunk.
+- `main` is now 7 phases behind. This is the last phase PLAN.md defines, so this gap will only
+  close via a deliberate decision to merge everything forward, not by further phase work closing
+  it incrementally.
+- Everything else flagged in every prior session's "Open questions" (artifact retention, manifest
+  schema drift on an AI-approved fix exceeding `maxItems: 3`, no real `ANTHROPIC_API_KEY`
+  available in this sandbox so AI escalation has never been verified against the real API, no
+  frontend `.spec.ts` coverage, root-owned `test-results`/`playwright-report` from early Docker
+  sessions) is still open — none of it was in this phase's scope to resolve.
+
+## Branch
+- `feature/ai-healing` — Phase 9, Phase 10, and Phase 11 (this session), branched from
   `feature/webapp-execution`'s tip (`4c48185`). Ready for review; uncommitted.

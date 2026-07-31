@@ -147,6 +147,36 @@ test(
 );
 
 test(
+  'GET /api/ai-usage aggregates token spend across every AI-sourced fix, ignoring fallback ones',
+  withServer(fakeRunSpec([healingEvent, aiHealingEvent]), async ({ baseUrl }) => {
+    const created: any = await (
+      await fetch(`${baseUrl}/api/tests`, {
+        method: 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify({ name: 'Smoke', specPath: 'tests/smoke.spec.ts' }),
+      })
+    ).json();
+
+    // Two runs — two AI heals of the same element (each queues since the prior fix is still
+    // pending... actually recordHealing dedups pending ones, so decide the first before the
+    // second run to prove aggregation isn't just "count of pending fixes" but survives decisions.
+    await fetch(`${baseUrl}/api/tests/${created.id}/runs`, { method: 'POST', headers: jsonHeaders });
+    const beforeDecide: any = await (await fetch(`${baseUrl}/api/pending-fixes`, { headers: jsonHeaders })).json();
+    const aiFix = beforeDecide.find((f: any) => f.source === 'ai');
+    await fetch(`${baseUrl}/api/pending-fixes/${aiFix.id}`, {
+      method: 'PATCH',
+      headers: jsonHeaders,
+      body: JSON.stringify({ status: 'rejected' }),
+    });
+
+    const usage: any = await (await fetch(`${baseUrl}/api/ai-usage`, { headers: jsonHeaders })).json();
+    assert.equal(usage.totalHeals, 1);
+    assert.equal(usage.totalInputTokens, aiHealingEvent.tokensUsed.inputTokens);
+    assert.equal(usage.totalOutputTokens, aiHealingEvent.tokensUsed.outputTokens);
+  })
+);
+
+test(
   'a run with no healing events queues nothing',
   withServer(fakeRunSpec([]), async ({ baseUrl }) => {
     const created: any = await (

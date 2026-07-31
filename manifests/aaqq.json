@@ -25,16 +25,16 @@
     "element2": {
       "primary": {
         "strategy": "css",
-        "value": "button:nth-of-type(2) > span"
+        "value": "div:nth-of-type(3) > div > form > div:nth-of-type(4) > button:nth-of-type(2) > span"
       },
       "fallbacks": [
         {
-          "strategy": "text",
-          "value": "Select"
+          "strategy": "css",
+          "value": "button:nth-of-type(2) > span"
         },
         {
-          "strategy": "css",
-          "value": "div:nth-of-type(3) > div > form > div:nth-of-type(4) > button:nth-of-type(2) > span"
+          "strategy": "text",
+          "value": "Select"
         }
       ]
     },

@@ -2,6 +2,8 @@
 // step 4 / 4's "no full page" security requirement). Only ever called after every deterministic
 // manifest fallback has already failed; pulls a small, pruned snapshot of interactive elements
 // currently on the page — never the full page HTML, never <script>/<style> contents.
+const { redactSecrets } = require('./redact');
+
 const MAX_ELEMENTS = 40;
 const MAX_CHARS = 6000;
 const INTERACTIVE_SELECTOR = 'a,button,input,select,textarea,[role],[data-testid],label';
@@ -27,7 +29,7 @@ async function extractDomContext(page, opts = {}) {
     { selector: INTERACTIVE_SELECTOR, attrNames: ATTRS, limit: maxElements }
   );
 
-  const json = JSON.stringify(snapshot);
+  const json = redactSecrets(JSON.stringify(snapshot));
   return json.length > maxChars ? json.slice(0, maxChars) : json;
 }
 

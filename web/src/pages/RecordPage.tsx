@@ -42,6 +42,30 @@ export function RecordPage() {
     };
   }, []);
 
+  // Native (non-passive) listener, not React's onWheel — React attaches wheel handlers as
+  // passive by default, which silently ignores preventDefault() and lets the *hosting* page
+  // scroll instead of forwarding the gesture into the remote session.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    function handleWheel(e: WheelEvent) {
+      const canvas = canvasRef.current;
+      const ws = wsRef.current;
+      if (!canvas || !ws || ws.readyState !== WebSocket.OPEN) return;
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * frameSize.width;
+      const y = ((e.clientY - rect.top) / rect.height) * frameSize.height;
+      const deltaX = e.deltaX * (frameSize.width / rect.width);
+      const deltaY = e.deltaY * (frameSize.height / rect.height);
+      ws.send(JSON.stringify({ kind: 'mouse', type: 'mouseWheel', x, y, deltaX, deltaY }));
+    }
+
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', handleWheel);
+  }, [frameSize]);
+
   async function handleStart(event: FormEvent) {
     event.preventDefault();
     if (!credentials) return;
@@ -174,6 +198,10 @@ export function RecordPage() {
           </button>
           {error && <p className={styles.error}>{error}</p>}
         </form>
+        <p className={styles.notice}>
+          Anything you type while recording is saved as plain text in the test file so it can be
+          replayed later — avoid typing real passwords or other sensitive personal data.
+        </p>
       </div>
     );
   }
