@@ -12,6 +12,7 @@ const path = require('path');
 const crypto = require('crypto');
 const defaultRunSpec = require('../runner.ts').runSpec;
 const { RunManager } = require('../execution/runManager.ts');
+const { checkSyntax } = require('../../../scripts/lib/check-syntax.js');
 
 export interface TestsRouterDeps {
   repoRoot: string;
@@ -74,6 +75,37 @@ function createTestsRouter({
     const removed = testsStore.remove(req.params.id);
     if (!removed) return res.status(404).json({ error: 'test case not found' });
     res.status(204).end();
+  });
+
+  // Read/edit the test's actual .spec.ts source directly — REQUIREMENTS.md's "script is the
+  // source of truth" applies to in-app editing too, not just what CI runs. `specPath` was
+  // already validated (path-traversal + existence) when the test was created via POST /tests, so
+  // it's trusted here.
+  router.get('/tests/:id/source', (req: Request<{ id: string }>, res: Response) => {
+    const test = testsStore.get(req.params.id);
+    if (!test) return res.status(404).json({ error: 'test case not found' });
+    const specPath = path.join(repoRoot, test.specPath);
+    if (!fs.existsSync(specPath)) return res.status(404).json({ error: `spec file not found: ${test.specPath}` });
+    res.json({ source: fs.readFileSync(specPath, 'utf8') });
+  });
+
+  router.patch('/tests/:id/source', (req: Request<{ id: string }>, res: Response) => {
+    const test = testsStore.get(req.params.id);
+    if (!test) return res.status(404).json({ error: 'test case not found' });
+
+    const { source } = req.body ?? {};
+    if (typeof source !== 'string' || !source.trim()) {
+      return res.status(400).json({ error: 'source must be a non-empty string' });
+    }
+
+    const syntaxErrors = checkSyntax(source);
+    if (syntaxErrors.length > 0) {
+      return res.status(400).json({ error: 'source has syntax errors', details: syntaxErrors });
+    }
+
+    const specPath = path.join(repoRoot, test.specPath);
+    fs.writeFileSync(specPath, source);
+    res.json({ source });
   });
 
   router.post('/tests/:id/runs', async (req: Request<{ id: string }>, res: Response) => {

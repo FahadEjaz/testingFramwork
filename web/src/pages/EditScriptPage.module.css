@@ -1,0 +1,76 @@
+.back {
+  font-size: 12.5px;
+  color: var(--slate);
+  text-decoration: none;
+  display: inline-block;
+  margin-bottom: 14px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.spec {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--slate);
+  margin-bottom: 16px;
+}
+
+.saveButton {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--signal-blue);
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.saveButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.success {
+  color: var(--pass-teal);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.error {
+  color: var(--fail-crimson);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.error ul {
+  font-family: var(--mono);
+  font-size: 12px;
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.editor {
+  width: 100%;
+  min-height: 60vh;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 18px;
+  resize: vertical;
+  tab-size: 2;
+}
+
+.editor:focus {
+  outline: none;
+  border-color: var(--signal-blue);
+}

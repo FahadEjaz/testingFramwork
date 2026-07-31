@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { saveRecording, startRecording, stopRecording } from '../api';
+import { ApiError, saveRecording, startRecording, stopRecording } from '../api';
 import { useAuth } from '../auth/AuthContext';
 import { formatLocator } from '../lib/runStatus';
 import type { RecordedAction } from '../types';
@@ -76,8 +76,12 @@ export function RecordPage() {
       setSessionId(id);
       connectSocket(wsPath);
       setStep('recording');
-    } catch {
-      setError('Could not start a recording session — check the URL and try again.');
+    } catch (err) {
+      // Surface the backend's actual reason (e.g. a slow site timing out navigation, or the
+      // concurrency cap) instead of a one-size-fits-all message — a previous version of this
+      // handler discarded it entirely, which is exactly what made a real timeout indistinguishable
+      // from a typo'd URL.
+      setError(err instanceof ApiError ? err.message : 'Could not start a recording session — check the URL and try again.');
     } finally {
       setStarting(false);
     }

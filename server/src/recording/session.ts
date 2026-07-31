@@ -92,7 +92,13 @@ class RecordingSession {
       maxHeight: VIEWPORT.height,
       everyNthFrame: 1,
     });
-    await this.page.goto(this.startUrl);
+    // waitUntil: 'commit' (navigation started, response headers received) rather than the
+    // default 'load' (every resource finished) — a slow/heavy site can take well past Playwright's
+    // default 30s timeout to fully "load", but the recording session doesn't need that: the
+    // screencast already streams frames as the page continues rendering live, so the user sees
+    // it regardless. Timeout still capped (60s) so start() can't hang forever against a truly
+    // dead/unreachable URL.
+    await this.page.goto(this.startUrl, { waitUntil: 'commit', timeout: 60_000 });
     this.status = 'live';
   }
 

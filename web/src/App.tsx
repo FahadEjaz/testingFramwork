@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
+import { EditScriptPage } from './pages/EditScriptPage';
 import { LoginPage } from './pages/LoginPage';
 import { PendingFixesPage } from './pages/PendingFixesPage';
 import { RecordPage } from './pages/RecordPage';
@@ -23,6 +24,7 @@ function App() {
         >
           <Route path="/" element={<TestListPage />} />
           <Route path="/tests/:id" element={<TestDetailPage />} />
+          <Route path="/tests/:id/edit" element={<EditScriptPage />} />
           <Route path="/tests/:testId/runs/:runId" element={<RunDetailPage />} />
           <Route path="/pending-fixes" element={<PendingFixesPage />} />
           <Route path="/record" element={<RecordPage />} />

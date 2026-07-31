@@ -6,10 +6,14 @@ import type { AiUsageSummary, PendingFix, PendingFixStatus, RecordedAction, Run,
 
 export class ApiError extends Error {
   status: number;
+  // Only present for a handful of endpoints (e.g. PATCH /tests/:id/source's syntax errors) that
+  // return a list of specific problems alongside the summary `message`.
+  details?: string[];
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, details?: string[]) {
     super(message);
     this.status = status;
+    this.details = details;
   }
 }
 
@@ -28,7 +32,8 @@ async function request<T>(credentials: Credentials, path: string, init: RequestI
   const body = await res.json().catch(() => null);
   if (!res.ok) {
     const message = body && typeof body === 'object' && 'error' in body ? String(body.error) : res.statusText;
-    throw new ApiError(res.status, message);
+    const details = body && typeof body === 'object' && Array.isArray(body.details) ? body.details.map(String) : undefined;
+    throw new ApiError(res.status, message, details);
   }
   return body as T;
 }
@@ -55,6 +60,17 @@ export function deleteTest(credentials: Credentials, id: string): Promise<void> 
 
 export function triggerRun(credentials: Credentials, testId: string): Promise<Run> {
   return request<Run>(credentials, `/api/tests/${testId}/runs`, { method: 'POST' });
+}
+
+export function getTestSource(credentials: Credentials, id: string): Promise<{ source: string }> {
+  return request<{ source: string }>(credentials, `/api/tests/${id}/source`);
+}
+
+export function updateTestSource(credentials: Credentials, id: string, source: string): Promise<{ source: string }> {
+  return request<{ source: string }>(credentials, `/api/tests/${id}/source`, {
+    method: 'PATCH',
+    body: JSON.stringify({ source }),
+  });
 }
 
 export function listRunsForTest(credentials: Credentials, testId: string): Promise<Run[]> {

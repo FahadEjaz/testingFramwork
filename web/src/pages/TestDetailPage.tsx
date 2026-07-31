@@ -75,6 +75,9 @@ export function TestDetailPage() {
           <button className={styles.textButton} onClick={handleDelete} type="button">
             Delete
           </button>
+          <Link className={styles.textButton} to={`/tests/${id}/edit`}>
+            Edit Script
+          </Link>
           <button className={styles.runButton} onClick={handleRun} disabled={running} type="button">
             {running ? 'Running…' : '▶ Run'}
           </button>
