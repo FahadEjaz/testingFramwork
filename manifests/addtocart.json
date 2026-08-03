@@ -1,0 +1,157 @@
+{
+  "spec": "tests/addtocart.spec.ts",
+  "elements": {
+    "element1": {
+      "primary": {
+        "strategy": "role",
+        "role": "button",
+        "name": "Close"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(2) > button"
+        },
+        {
+          "strategy": "text",
+          "value": "Close"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(4) > div:nth-of-type(2) > div > div > div:nth-of-type(2) > button"
+        }
+      ]
+    },
+    "element2": {
+      "primary": {
+        "strategy": "text",
+        "value": "MS 182 Petrol Chainsaw"
+      },
+      "fallbacks": [
+        {
+          "strategy": "role",
+          "role": "link",
+          "name": "MS 182 Petrol Chainsaw"
+        },
+        {
+          "strategy": "css",
+          "value": "strong > a"
+        },
+        {
+          "strategy": "css",
+          "value": "ol > li:nth-of-type(3) > div > div > strong > a"
+        }
+      ]
+    },
+    "element3": {
+      "primary": {
+        "strategy": "css",
+        "value": "#dealer-search-menu a"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "Select Dealer"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(1) > div > div > div > div > span:nth-of-type(2)"
+        },
+        {
+          "strategy": "css",
+          "value": "div > span:nth-of-type(2)"
+        }
+      ]
+    },
+    "element4": {
+      "primary": {
+        "strategy": "css",
+        "value": "[data-ampickup-js=\"chose-store-accordion-button\"]"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "Select Store"
+        },
+        {
+          "strategy": "css",
+          "value": "div > div:nth-of-type(5) > div:nth-of-type(1) > div > button > span"
+        }
+      ]
+    },
+    "element5": {
+      "primary": {
+        "strategy": "css",
+        "value": "[data-ampickup-js=\"choose-store\"]"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "STIHL Shop Joondalup Collect Delivery 6/116 Winton RoadJoondalupWestern Australi"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(1) > div > div:nth-of-type(1) > div > div > div"
+        }
+      ]
+    },
+    "element6": {
+      "primary": {
+        "strategy": "role",
+        "role": "button",
+        "name": "Add to Cart"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "#product-addtocart-button"
+        },
+        {
+          "strategy": "text",
+          "value": "Add to Cart"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(4) > div > div > div:nth-of-type(2) > div:nth-of-type(2) > button"
+        }
+      ]
+    },
+    "element7": {
+      "primary": {
+        "strategy": "css",
+        "value": "button:nth-of-type(2) > span"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "Add to Cart"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(6) > aside:nth-of-type(5) > div:nth-of-type(2) > footer > button:nth-of-type(2) > span"
+        }
+      ]
+    },
+    "element8": {
+      "primary": {
+        "strategy": "role",
+        "role": "button",
+        "name": "Add to Cart"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "#product-addtocart-button"
+        },
+        {
+          "strategy": "text",
+          "value": "Add to Cart"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(4) > div > div > div:nth-of-type(2) > div:nth-of-type(2) > button"
+        }
+      ]
+    }
+  }
+}

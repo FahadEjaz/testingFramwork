@@ -129,6 +129,7 @@ export function RecordPage() {
   }
 
   function handleCanvasMouseDown(e: React.MouseEvent<HTMLCanvasElement>) {
+    e.preventDefault();
     hiddenInputRef.current?.focus();
     sendMouse('mousePressed', e.clientX, e.clientY);
   }

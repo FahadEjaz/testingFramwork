@@ -174,6 +174,84 @@ with no AI involvement.
 **Done when:** someone unfamiliar with the project could read one doc and understand the whole
 platform without reading the code first.
 
+## Phase 12 — In-app AI debug terminal *(requires explicit sign-off before starting — see below)*
+
+**Branch:** `feature/debug-session`
+
+> **Gate: this phase breaks REQUIREMENTS.md non-negotiable #2** ("AI on the failure path only,
+> one call site") as currently written — it adds a second, open-ended, interactive AI call site
+> alongside the existing single scoped `resilientLocator` → `ai-heal-client.ts` call. It's gated
+> behind an actual test failure plus an explicit human click (not a per-run cost), and it keeps
+> non-negotiable #4 (no silent self-modification — see review-queue design below), but it does
+> not fit non-negotiable #5's capped/redacted-context model: there's no way to cap/redact an
+> open-ended interactive session the way `extractDomContext` caps a DOM snippet. **Do not start
+> this phase without an explicit product decision to amend/accept this as a deliberate exception
+> to non-negotiable #2** — same "wait for the go-ahead" bar this file already applies to Phase 4.
+
+When a run fails, let the user open a browser-embedded terminal running a live `claude` CLI
+session, scoped to the failing test's directory, prompt pre-seeded with the failing spec path +
+error output, so they can interactively ask Claude to fix the script — reviewed through a new
+diff queue before anything touches the real spec/manifest.
+
+- **New subsystem** `server/src/debugSession/` (sibling to `recording/`, `execution/`):
+  `session.ts` (owns worktree + container + `node-pty` process + audit log),
+  `sessionManager.ts` (concurrency cap, idle/duration sweep, capability-token mint/consume, one
+  active session per `testId`), `websocketHandler.ts` (PTY-over-websocket at
+  `/ws/debug-sessions/:id`, same `WebSocketServer({noServer:true})` + `upgrade` pattern as
+  `recording/websocketHandler.ts`), `worktree.ts` (git worktree + sparse-checkout + diff capture
+  + teardown).
+- **Isolation**: `git worktree add` + `sparse-checkout` limited to the failing test's files
+  (never the live checkout), inside a per-session Docker container — read-only root FS, explicit
+  bind mount of only the worktree, never `server/data/` or `.env`. `--cap-drop=ALL
+  --security-opt=no-new-privileges` + memory/cpu limits. On server boot, sweep orphaned
+  containers (labeled `com.testingframework.debug-session=<id>`) and orphaned worktrees,
+  best-effort capture any in-progress diff before removing them.
+- **Egress firewall**: dedicated Docker bridge network with no direct internet route; outbound
+  forced through a forward-proxy (tinyproxy/mitmproxy) ACL'd to `api.anthropic.com` only via
+  `HTTPS_PROXY`/`NO_PROXY`; backed by a host `iptables DOCKER-USER` rule dropping non-proxy
+  traffic from that bridge, so ignoring the proxy env vars (or a prompt-injected `curl
+  --noproxy` attempt) still gets blocked at the firewall.
+- **Auth**: capability token minted via an authenticated `POST /api/debug-sessions`, single-use,
+  15-min TTL, validated and consumed inside the websocket `upgrade` handler before
+  `handleUpgrade` proceeds — stricter than the recording websocket's plain-session-id scheme,
+  since this grants shell execution rather than screencast viewing.
+- **Keep the CLI's own permission prompts live** (no headless/yolo mode) inside the session —
+  destructive actions (force-push, `rm -rf`, `git reset --hard`) still require a human click.
+  Seed the failing-test prompt as the first PTY input once `claude` is ready, not auto-submitted
+  — let the human see/edit it before it's sent, as a direct mitigation against adversarial
+  content in the error string itself.
+- **Review queue**: new `server/src/storage/debugSessionDiffsStore.ts`, deliberately **not**
+  `pendingFixesStore` (that store's shape is locator-swap-specific, safe because
+  `patchSpecLocator`'s AST surgery targets exactly one known expression; a live-coding diff is
+  unstructured/multi-file). Explicit in-session "Submit for review" action captures the
+  worktree's diff + base file hash; Approve compares the hash against the live file (409 if it
+  moved, mirroring `pendingFixes.ts`'s existing stale-manifest check) and applies via `git
+  apply`; Reject discards the worktree. Same pending/approved/rejected states and human-only
+  Approve/Reject UI pattern as the existing Pending Fixes screen — no auto-merge, ever.
+- **Audit logging**: timestamped keystroke transcript (`jsonl`), run through
+  `scripts/lib/redact.js`'s pattern-filter before persisting (a human could paste a real
+  credential into the terminal), served only over the normal authenticated API — never an
+  unauthenticated route like the run-report iframe. "Files touched" derives from the worktree's
+  own `git diff`/`git status`, not a separate inotify mechanism.
+- **Numbers** (grounded against `sessionManager.ts`'s `MAX_CONCURRENT_SESSIONS=3`/5-min idle/
+  10-min grace and `runManager.ts`'s `MAX_CONCURRENT_RUNS=2`): concurrency cap **2** (heavier
+  per-session cost than a recording tab — parity with run concurrency, not recording
+  concurrency); idle timeout **10 min** (more think-time than active mouse-dragging); **hard
+  45-min absolute session duration cap** (new concept — cost accrues per-token over time, unlike
+  a flat-cost recording session); **no stopped-grace window** (token + container die together at
+  session end; the diff is persisted separately beforehand instead of relying on a reconnect
+  window); model default via new `DEBUG_SESSION_MODEL` env var, same pattern as `AI_HEAL_MODEL`
+  — never silently defaults to the most expensive model, explicit opt-up only.
+- **Spend visibility**: track debug-session token spend separately from the existing healing-
+  pipeline `/ai-usage` aggregation (`pendingFixes.ts`) — different budget, different purpose,
+  don't mix them.
+
+**Done when:** a user can open this terminal from a failed run, interactively iterate with
+Claude on the failing test inside an isolated worktree/container with no access to
+`server/data/`/secrets and no egress beyond `api.anthropic.com`, submit a diff for review, and
+Approve/Reject it through a queue separate from Pending Fixes — with the non-negotiable #2
+exception explicitly signed off on beforehand, not silently designed around.
+
 ## Future / deferred (not part of this plan)
 
 Tracked here so they aren't forgotten, not because they're scheduled:

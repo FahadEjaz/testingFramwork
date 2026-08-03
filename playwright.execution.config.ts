@@ -13,6 +13,7 @@ const reportDir = process.env.PW_RUN_REPORT_DIR || 'playwright-report';
 
 export default defineConfig({
   testDir: './tests',
+  timeout: 90000,
   retries: 0,
   workers: 1,
   outputDir,
@@ -22,6 +23,8 @@ export default defineConfig({
     trace: 'on',
     video: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    navigationTimeout: 60000,
+    actionTimeout: 15000,
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 });

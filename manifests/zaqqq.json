@@ -1,0 +1,351 @@
+{
+  "spec": "tests/zaqqq.spec.ts",
+  "elements": {
+    "element1": {
+      "primary": {
+        "strategy": "role",
+        "role": "button",
+        "name": "Accept All"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "#onetrust-accept-btn-handler"
+        },
+        {
+          "strategy": "text",
+          "value": "Accept All"
+        },
+        {
+          "strategy": "css",
+          "value": "div > div:nth-of-type(1) > div > div:nth-of-type(2) > div > button:nth-of-type(3)"
+        }
+      ]
+    },
+    "element2": {
+      "primary": {
+        "strategy": "css",
+        "value": "div:nth-of-type(4) > div > form > div:nth-of-type(4) > button:nth-of-type(2) > span"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "button:nth-of-type(2) > span"
+        },
+        {
+          "strategy": "text",
+          "value": "Select"
+        }
+      ]
+    },
+    "element3": {
+      "primary": {
+        "strategy": "css",
+        "value": "a > img"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(1) > div:nth-of-type(2) > div > div:nth-of-type(1) > a > img"
+        },
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-0__"
+        }
+      ]
+    },
+    "element4": {
+      "primary": {
+        "strategy": "css",
+        "value": "div:nth-of-type(3) > div:nth-of-type(1) > div:nth-of-type(4) > div:nth-of-type(2) > div:nth-of-type(2) > button:nth-of-type(2)"
+      },
+      "fallbacks": [
+        {
+          "strategy": "role",
+          "role": "button",
+          "name": "S"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(2) > button:nth-of-type(2)"
+        },
+        {
+          "strategy": "text",
+          "value": "S"
+        }
+      ]
+    },
+    "element5": {
+      "primary": {
+        "strategy": "css",
+        "value": "div > div > div:nth-of-type(3) > div:nth-of-type(3) > button > span:nth-of-type(1)"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "button > span:nth-of-type(1)"
+        },
+        {
+          "strategy": "text",
+          "value": "Add to bag"
+        }
+      ]
+    },
+    "element6": {
+      "primary": {
+        "strategy": "css",
+        "value": "button > span"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "View bag"
+        },
+        {
+          "strategy": "css",
+          "value": "div > div:nth-of-type(4) > div > div:nth-of-type(2) > button > span"
+        }
+      ]
+    },
+    "element7": {
+      "primary": {
+        "strategy": "css",
+        "value": "button > span:nth-of-type(1)"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "Proceed to checkout"
+        },
+        {
+          "strategy": "css",
+          "value": "div > div:nth-of-type(2) > div > div:nth-of-type(2) > button > span:nth-of-type(1)"
+        }
+      ]
+    },
+    "element8": {
+      "primary": {
+        "strategy": "css",
+        "value": "div > span"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "Guest checkout"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(2) > div > label > div:nth-of-type(2) > div > span"
+        }
+      ]
+    },
+    "element9": {
+      "primary": {
+        "strategy": "role",
+        "role": "radio"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "label > input"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(2) > div > div:nth-of-type(2) > div > label > input"
+        }
+      ]
+    },
+    "element10": {
+      "primary": {
+        "strategy": "role",
+        "role": "radio"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "label > input"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(2) > div > div:nth-of-type(2) > div > label > input"
+        }
+      ]
+    },
+    "element11": {
+      "primary": {
+        "strategy": "role",
+        "role": "textbox"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "#email"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(2) > div:nth-of-type(2) > form > div:nth-of-type(1) > div > input"
+        }
+      ]
+    },
+    "element12": {
+      "primary": {
+        "strategy": "role",
+        "role": "textbox"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "#email"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(2) > div:nth-of-type(2) > form > div:nth-of-type(1) > div > input"
+        }
+      ]
+    },
+    "element13": {
+      "primary": {
+        "strategy": "role",
+        "role": "textbox"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "#email"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(2) > div:nth-of-type(2) > form > div:nth-of-type(1) > div > input"
+        }
+      ]
+    },
+    "element14": {
+      "primary": {
+        "strategy": "css",
+        "value": "button > span"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "Continue as guest"
+        },
+        {
+          "strategy": "css",
+          "value": "label > div:nth-of-type(2) > div:nth-of-type(2) > form > button > span"
+        }
+      ]
+    },
+    "element15": {
+      "primary": {
+        "strategy": "role",
+        "role": "textbox"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "#email"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(2) > div:nth-of-type(2) > form > div:nth-of-type(1) > div:nth-of-type(1) > input"
+        }
+      ]
+    },
+    "element16": {
+      "primary": {
+        "strategy": "role",
+        "role": "textbox"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "#email"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(2) > div:nth-of-type(2) > form > div:nth-of-type(1) > div:nth-of-type(1) > input"
+        }
+      ]
+    },
+    "element17": {
+      "primary": {
+        "strategy": "role",
+        "role": "textbox"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "#email"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(2) > div:nth-of-type(2) > form > div:nth-of-type(1) > div > input"
+        }
+      ]
+    },
+    "element18": {
+      "primary": {
+        "strategy": "css",
+        "value": "button > span"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "Continue as guest"
+        },
+        {
+          "strategy": "css",
+          "value": "label > div:nth-of-type(2) > div:nth-of-type(2) > form > button > span"
+        }
+      ]
+    },
+    "element19": {
+      "primary": {
+        "strategy": "role",
+        "role": "textbox"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "#email"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(2) > div:nth-of-type(2) > form > div:nth-of-type(1) > div:nth-of-type(1) > input"
+        }
+      ]
+    },
+    "element20": {
+      "primary": {
+        "strategy": "role",
+        "role": "textbox"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "#email"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(2) > div:nth-of-type(2) > form > div:nth-of-type(1) > div > input"
+        }
+      ]
+    },
+    "element21": {
+      "primary": {
+        "strategy": "css",
+        "value": "button > span"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "Continue as guest"
+        },
+        {
+          "strategy": "css",
+          "value": "label > div:nth-of-type(2) > div:nth-of-type(2) > form > button > span"
+        }
+      ]
+    }
+  }
+}
