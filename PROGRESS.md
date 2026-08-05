@@ -5,20 +5,30 @@
 > check here before re-reading REQUIREMENTS.md or PLAN.md in full.
 
 ## Current phase
-Phase 11 — Hardening & handoff docs *(the last phase in PLAN.md)*
+Phase 11 — Hardening & handoff docs *(the last phase in PLAN.md)*. Phase 12 (in-app AI debug
+terminal) is documented in PLAN.md but explicitly gated — not started, needs explicit sign-off
+since it breaks REQUIREMENTS.md non-negotiable #2 as currently written.
 
-## Status
-Ready for review, still on `feature/ai-healing` (uncommitted) — **same deviation as Phase 8/10**:
-Phases 9, 10, and 11 are all sitting uncommitted together on this one branch, since there was
-never a clean commit to cut a fresh `feature/hardening` branch from. If you want clean
-phase-per-branch history, commit what's here first, then later phases (there are none left in
-PLAN.md, but any future work) can branch cleanly from that. Otherwise all three phases' diffs are
-sitting together right now (see Branch section for the file split).
+## Status — CORRECTED 2026-08-05
+Everything below this line (Phase 4 session onward) was written describing an **uncommitted**
+state that no longer matches reality. As of 2026-08-05: `git status` is clean, `main` is up to
+date with `origin/main`, and `git branch --no-merged main` is empty — every phase's work (0-2,
+4-11) is already committed and merged into `main`. There is no `feature/ai-healing` branch; it
+doesn't exist in this repo. Someone committed/merged everything directly to `main` in sessions
+this log never captured (`main`'s tip has since moved past even that to "Some fixes down", "Test
+script is now editable", "Added new plan for sandbox docker testing and improvement"). The 7
+now-fully-merged feature branches referenced throughout this log (`feature/deterministic-healing`,
+`feature/locator-manifest`, `feature/recording-session`, `feature/scaffolding`,
+`feature/webapp-backend`, `feature/webapp-execution`, `feature/webapp-frontend`) were deleted this
+session as stale/redundant — confirmed merged first.
 
-**This is the last phase PLAN.md defines.** Phases 0-11 are now all built (0-2 and 4-8 committed
-across various branches per their own PROGRESS.md entries above; 9-11 uncommitted on
-`feature/ai-healing`). What's left is entirely human calls: review/commit/merge this branch,
-decide whether/when to bring `main` current, and whatever comes after PLAN.md's documented
+**Do not trust the "still uncommitted on feature/X" claims in the phase entries below** — they
+describe the state at the time each phase's session ended, not current reality. Verify against
+`git log`/`git status` before acting on them.
+
+**This is the last phase PLAN.md defines (besides gated Phase 12).** What's left is human calls:
+whether/when to start Phase 12, cleaning up the root-owned `test-results`/`playwright-report`
+dirs (still flagged since Phase 2, still unresolved), and whatever comes after PLAN.md's
 "Future / deferred" list if the project continues.
 
 Note also two untracked files in the working tree, unrelated to any phase and left untouched
@@ -1091,3 +1101,262 @@ memory/notes rather than trusting my reconstruction blindly.
 ## Branch
 - `feature/ai-healing` — Phase 9, Phase 10, and Phase 11 (this session), branched from
   `feature/webapp-execution`'s tip (`4c48185`). Ready for review; uncommitted.
+
+---
+
+## Phase 12 session — In-app AI debug terminal — `feature/debug-session`
+
+Explicitly greenlit this session per PLAN.md's own gate (Phase 12 "requires explicit sign-off
+before starting" since it's a deliberate exception to REQUIREMENTS.md non-negotiable #2 — one
+scoped AI call site becomes an open-ended interactive one). Branched from `main`, which — per the
+corrected Status note earlier in this log — already has every other phase (0-11) committed.
+
+### Completed this session
+- `server/src/debugSession/worktree.ts` — `git worktree add --detach` + non-cone
+  `sparse-checkout set` scoped to exactly the failing spec + its manifest + `package.json`/
+  `tsconfig.json`/`playwright.config.ts`/`tests/support/` — never the live checkout, never
+  `server/`/`web/`/other tests. All mutating git-worktree calls (`create`/`teardown`) go through a
+  cross-process exclusive-lock-file wrapper (`.git/debug-worktree.lock`) — see Bugs below for why
+  this was necessary, not speculative.
+- `server/src/debugSession/session.ts` — `DebugSession`: owns one Docker container (via
+  `node-pty` spawning `docker run` directly, not `dockerode` — same "shell out via execFile"
+  style as `runner.ts`) bind-mounted to the worktree, `--read-only` root fs, `--tmpfs /tmp` +
+  `--tmpfs .../.claude`, `--cap-drop=ALL --security-opt=no-new-privileges`, memory/cpu limits.
+  Seed prompt (failing spec path + run stats) is written into the pty ~1.5s after first output but
+  **never auto-submitted** (no trailing Enter) — a human must read/edit/press Enter themselves,
+  direct mitigation against adversarial content in the error string. Every byte in and out is
+  audit-logged to a per-session `.jsonl`, redacted through the existing (Phase 9)
+  `scripts/lib/redact.js` first.
+- `server/src/debugSession/sessionManager.ts` — concurrency cap **2** (parity with Phase 7's run
+  cap, heavier per-session cost than Phase 6's recording-tab cap of 3), idle timeout **10 min**,
+  one active session per `testId`, single-use capability tokens with a **15-min TTL** (stricter
+  than Phase 6's recording websocket, which only trusts session-id possession — this grants shell
+  execution, not screencast viewing), boot-time orphan sweep (`docker ps`/`git worktree list`,
+  salvages any diff still present before removing).
+- `server/src/debugSession/websocketHandler.ts` — PTY-over-websocket at
+  `/ws/debug-sessions/:id?token=...`; the token is validated **and consumed** before
+  `handleUpgrade` proceeds.
+- `server/src/storage/debugSessionDiffsStore.ts` — its own review-queue store, deliberately not
+  `pendingFixesStore` (that one's shape is locator-swap-specific; a live-coding diff is
+  unstructured/multi-file) — pending/approved/rejected, `baseHashes` (sha256 per touched file at
+  submit time) so Approve can refuse (409) if the live file drifted since.
+- `server/src/routes/debugSessions.ts` — `POST /debug-sessions` (only for a `run.status ===
+  'failed'`; mints worktree + token), `POST /debug-sessions/:id/submit` (captures diff, disposes
+  the worktree/container, queues a review record), `POST /debug-sessions/:id/discard`,
+  `GET /debug-sessions/:id/audit-log` (authenticated — never an unauthenticated route like Phase
+  7's run-report iframe, per PLAN.md's explicit call-out), `GET/PATCH /debug-session-diffs` (Approve
+  re-hashes + `git apply`s; Reject is a pure status flip).
+- `server/src/debugSession/Dockerfile` — minimal `node:22-slim` + `git` + `@anthropic-ai/
+  claude-code@2.1.222` (pinned to the exact version already on this host — confirmed via `npm
+  view` that this is the real, official package backing the `claude` binary). **Built and run for
+  real this session** (`docker build`, then a locked-down `docker run --read-only --cap-drop=ALL
+  --security-opt=no-new-privileges ... claude --version` — printed `2.1.222 (Claude Code)`
+  successfully under every one of those restrictions at once).
+- `scripts/setup-debug-session-network.sh` + `scripts/debug-session-proxy-filter.txt` — one-time,
+  human-run (needs `sudo`) host setup for the egress firewall: dedicated internal Docker network +
+  tinyproxy forward proxy filtered to `api.anthropic.com` only, plus the `iptables DOCKER-USER`
+  rule printed (not executed) for a human to review and run themselves. `session.ts` **fails
+  closed**: `--network none` (zero egress) unless this network already exists — confirmed via
+  `sudo -n iptables ...` failing with "a password is required" that I genuinely cannot run this
+  non-interactively, so there was no path to "just do it myself" here even if it were otherwise
+  appropriate to.
+- Wired into `app.ts` (new `debugSessionManager`/`skipDebugSessionSweep` options, orphan sweep at
+  boot) and `index.ts` (`attachDebugSessionWebsocket`, alongside Phase 6's recording websocket).
+- Tests, all real (no git/docker mocking — see Decisions): `debugSessionWorktree.test.ts` (5,
+  scoping/leak/diff/teardown/live-checkout-untouched), `debugSessionManager.test.ts` (7,
+  concurrency/per-test-lock/token mint-consume-expiry), `debugSessionsRoutes.test.ts` (5, full
+  HTTP surface including a real `git apply` against this repo's own `tests/smoke.spec.ts` —
+  restores the file's exact original bytes in `finally` every time, verified clean via `git
+  status` after every run), `debugSessionPty.test.ts` (1, **a real Docker container driven over a
+  real pty** — spawns via `DEBUG_SESSION_COMMAND_OVERRIDE=sh` instead of real `claude` since no
+  `ANTHROPIC_API_KEY` is available in this sandbox, same precedent as Phase 9's AI healing never
+  being exercised against the real API here; edits a file from *inside* the container and
+  confirms it lands on the host bind mount, confirms an emailed-in string comes out
+  `[REDACTED-EMAIL]` in the audit log, confirms container removal on `stop()`). Full suite: 73/73
+  green, repeated 3x to confirm no flakiness after the fixes below; `npx tsc --noEmit` clean.
+
+### Bugs found and fixed during this session's own testing (not just written and assumed correct)
+- **Sparse-checkout path leak**: first version of `SHARED_SUPPORT_PATHS` used bare filenames
+  (`package.json`, `tsconfig.json`) with no leading slash. Non-cone `git sparse-checkout` treats a
+  pattern with no embedded/leading slash as gitignore-style ("matches at any depth"), so it
+  silently pulled in `web/package.json` and `web/tsconfig.json` too — caught by actually walking
+  the worktree's real on-disk file list in a test, not by trusting `git ls-files` (which lists
+  every tracked path regardless of the sparse-checkout skip-worktree bit, and would have hidden
+  this). Fixed by anchoring every pattern with a leading `/`.
+- **`activeCount()` undercounted, defeating the concurrency cap**: originally filtered
+  `status === 'live'`, but a session sits in `'starting'` until its websocket actually connects
+  and calls `session.start()` — a burst of `POST /debug-sessions` calls before anyone opened a
+  terminal could exceed `MAX_CONCURRENT_SESSIONS` undetected. Caught by a unit test expecting the
+  cap to throw on a 3rd concurrent start and getting no exception. Fixed to `!== 'stopped'`,
+  matching Phase 6's own `sessionManager.ts` (which already got this right).
+- **Concurrent `git worktree add`/`remove` across processes corrupted each other's state**:
+  surfaced as intermittent 502s only when the full test suite ran (test files run concurrently by
+  default) — never when any single debug-session test file ran alone. Root-caused to git's
+  worktree metadata under `.git/worktrees/` not being safe for concurrent cross-process
+  mutation. Fixed with a real cross-process exclusive-file-lock (`.git/debug-worktree.lock`,
+  open-`wx`-retry) around every `createWorktree`/`teardown` call, not by papering over it with a
+  test-runner concurrency flag — this is a genuine (if narrow) production consideration too, not
+  just a test-suite artifact.
+- **Boot-time orphan sweep killed a different test's live container**: `sweepOrphans()` correctly
+  `docker rm -f`s every container labeled `com.testingframework.debug-session` — right behavior
+  for a real one-time server boot, but every *other* test file's `createApp()` call was also
+  triggering a fresh sweep, and under the full suite's concurrent test-file execution, one file's
+  "boot" sweep would reap a container a different file's PTY test was actively using mid-test
+  (surfaced as a consistent, not-just-slow, 45s timeout only under full-suite load). Fixed by
+  adding `skipDebugSessionSweep: true` to every existing test file's `createApp()` call
+  (`app.test.ts`, `recordings.test.ts`, `editSource.test.ts`, `healingToPendingFixes.test.ts`) —
+  sweeping is only meaningful for an actual server boot, not a throwaway test-harness app instance.
+
+### Decisions & deviations from PLAN.md
+- **No egress firewall wired up live this session** — the Docker network + tinyproxy + filter are
+  written and ready, but actually enabling internet access for a session (even proxy-restricted)
+  needs a `sudo iptables` step this process cannot run non-interactively. Every session in this
+  sandbox runs with `--network none` until a human runs `scripts/setup-debug-session-network.sh`
+  themselves. This is a **fail-closed** default, not a shortcut past the requirement.
+- **Container has no Playwright/Chromium inside it** — the sandbox is for editing the failing
+  spec with `claude`, not re-running it against a real browser; running Chromium under
+  `--cap-drop=ALL`/read-only-root would need its own seccomp/sandbox carve-outs, out of scope for
+  this pass. A human (or a future phase) re-runs the test normally, outside the container, once a
+  diff is approved.
+- **`docker run` via `node-pty` directly, not `dockerode`** — no new dependency needed; matches
+  `runner.ts`'s existing "shell out via execFile" style for driving an external process.
+- **Diff review is its own store**, not layered onto `pendingFixesStore` — see PLAN.md's own
+  reasoning (locator-swap-specific shape vs. unstructured multi-file diff); Approve reuses the
+  same 409-on-stale-state pattern `pendingFixes.ts` already established, just keyed on a content
+  hash instead of "does the manifest entry still exist."
+- **Never actually exercised against the real Anthropic API** — no `ANTHROPIC_API_KEY` in this
+  sandbox, same standing caveat as Phase 9's AI healing. What's verified for real is the
+  isolation/plumbing (worktree scoping, container lockdown, pty data flow, diff capture/apply,
+  redaction) — not `claude`'s own behavior inside the sandbox.
+
+### Open questions for the human
+- **The `sudo iptables DOCKER-USER` step is still outstanding** — until someone runs
+  `scripts/setup-debug-session-network.sh` and then the printed iptables rule, every debug session
+  has zero network access and `claude` inside it cannot reach the real API at all. This is
+  intentional (fail closed) but means the feature is inert until that one manual step happens.
+  Needs a real password-holder to actually do it, not something to hand back "done."
+- **No frontend UI was built this session** — PLAN.md's Phase 12 bullet is entirely
+  `server/src/debugSession/` + storage/routes; a browser-embedded terminal (xterm.js or similar)
+  consuming `/ws/debug-sessions/:id` and a review screen for `debug-session-diffs` (mirroring
+  `PendingFixesPage`) are both still to build before a human could actually use this end-to-end
+  from the app rather than via direct API/websocket calls.
+- **The 1.5s seed-prompt delay is a heuristic**, not a detection of the CLI actually being ready
+  for input — same category of guess as every other timing constant in this project (Phase 6's
+  concurrency caps, etc.). Worth revisiting if it proves too short/long once a real
+  `ANTHROPIC_API_KEY` is available to test against the genuine interactive `claude` UI.
+- **`tfv2-debug-session:latest` (1.03GB) is a local-only Docker image** — not pushed anywhere, not
+  rebuilt automatically; a fresh environment needs `docker build -t tfv2-debug-session:latest -f
+  server/src/debugSession/Dockerfile .` run once before any real session can start.
+- Same standing items from every prior session: root-owned `test-results`/`playwright-report`,
+  no `ANTHROPIC_API_KEY` in this sandbox, `main` now 8 phases behind (0-11 committed, this
+  session's Phase 12 work uncommitted on `feature/debug-session`) — your call on when/how to
+  reconcile.
+
+---
+
+## Phase 12 session, part 2 — frontend terminal UI (same branch: `feature/debug-session`)
+
+Built the frontend half PLAN.md's Phase 12 bullet still needed: a browser-embedded terminal and a
+review screen for `debug-session-diffs`, per this session's earlier open question. Verified live
+against a real backend + real Docker container, not just built and assumed correct — found and
+fixed **four real bugs** in the process, three of them in server-side code this session's own
+automated test suite had marked "done" just hours earlier.
+
+### Completed this session
+- Installed `@xterm/xterm` + `@xterm/addon-fit` in `web/` — the one new dependency.
+- `web/src/pages/DebugSessionPage.tsx` (+ `.module.css`) — the terminal itself. On mount, calls
+  `POST /api/debug-sessions`, opens the returned `wsPath` as a websocket, wires an xterm.js
+  `Terminal` to it (`onData` → `{kind:'input'}`, `onResize` → `{kind:'resize'}`, incoming
+  `{type:'data'}` → `term.write()`, `{type:'exit'}` → shows a "session ended" overlay).
+  Submit-for-Review and Discard buttons call the corresponding REST routes and navigate away.
+  Carries a visible notice mirroring `RecordPage`'s own "avoid typing real secrets" pattern, since
+  redaction here (like there) is defense-in-depth, not a guarantee.
+- `web/src/pages/DebugSessionDiffsPage.tsx` (+ `.module.css`) — review queue for
+  `debug-session-diffs`, deliberately its own page (not folded into `PendingFixesPage`) matching
+  the backend's own separation. Renders the unified diff with basic `+`/`-`/`@@` line coloring;
+  Approve/Reject mirror `PendingFixesPage`'s existing pattern exactly.
+- `web/src/state/DebugSessionDiffsCountContext.tsx` — mirrors `PendingFixesCountContext` exactly
+  (sidebar badge + the review page share one count).
+- Wired in: `App.tsx` (routes `/tests/:testId/runs/:runId/debug` and `/debug-diffs`,
+  `DebugSessionDiffsCountProvider` alongside the existing `PendingFixesCountProvider`),
+  `Layout.tsx` (new "Debug Diffs" nav link + badge), `RunDetailPage.tsx` (an "Open Debug Session"
+  button, only rendered when `run.status === 'failed'` — the same gate the backend route itself
+  enforces).
+- **Verified live end-to-end**, the same bar every prior UI-touching phase set: registered a
+  deliberately-failing throwaway spec via the real API, triggered a real Playwright run against
+  it (genuinely failed), then drove the actual running app (backend on `:4100`, Vite on `:5183`)
+  with Playwright MCP browser tools — logged in, opened the run, clicked **Open Debug Session**,
+  and watched a **real `claude` CLI v2.1.222 splash screen stream live into the xterm.js terminal
+  from inside the locked-down container**, correctly fail closed with "Unable to connect to
+  Anthropic services" (no egress network configured — exactly the documented default, not a bug),
+  land on the "session ended" state, then clicked **Discard** and landed back on the run page.
+  Also confirmed `/debug-diffs`'s empty state renders correctly. Demo test/spec/manifest/data-dir
+  deleted afterward, matching every prior phase's own convention.
+
+### Bugs found and fixed during this session's own live verification (not caught by the automated suite written the same session)
+- **The websocket upgrade handler could never succeed on a session's first connection.** It
+  refused anything but `session.status === 'live'` — but status only ever becomes `'live'` as a
+  side effect of the `'connection'` handler that runs *after* the upgrade already succeeded, so
+  every first connection hit a circular dead end (`socket.destroy()` before ever reaching
+  `session.start()`). `debugSessionPty.test.ts` never caught this because it drives `DebugSession`
+  directly, bypassing this handler entirely. Fixed: only refuse an already-`'stopped'` session.
+- **A *pre-existing* Phase 6 bug, only exposed by Phase 12 existing at all**:
+  `recording/websocketHandler.ts` unconditionally `socket.destroy()`s any upgrade path it doesn't
+  recognize. Harmless when it was the only websocket handler on the server; `index.ts` now
+  attaches it *and* Phase 12's handler to the same `httpServer`, and since it's registered first,
+  it destroyed every single debug-session upgrade before Phase 12's own handler's listener (which
+  correctly just `return`s on a non-matching path) ever ran. No test anywhere attached both
+  handlers to one server the way `index.ts` actually does, so nothing caught this either — fixed
+  the same way, and added a regression test (`debugSessionWebsocket.test.ts`) that attaches both
+  handlers together, matching production. Together these two bugs are the entire explanation for
+  a `ws` client seeing "socket hang up" on every attempt, with zero server-side crash/log output.
+- **`docker run -i` alone isn't enough for `claude` to detect an interactive session.** Without
+  `-t` (pseudo-TTY allocation), the container's own process saw stdin as a plain pipe and `claude`
+  correctly treated it as non-interactive, printing "Input must be provided either through stdin
+  or as a prompt argument when using `--print`" instead of opening its real REPL — only visible by
+  actually looking at the streamed terminal output, not from any exit code or log line. Fixed by
+  adding `-t` alongside the existing `-i`.
+- **A debug session for an uncommitted spec silently "succeeded" with an empty, useless
+  worktree.** `git worktree add ... HEAD` only ever sees committed history; sparse-checkout
+  correctly filters out an uncommitted file, but silently, with the session otherwise reporting
+  success. This is the same underlying constraint `apply-healing-patches.js`'s
+  `assertCleanAndTracked()` guard already enforces (for a different reason) — here it wasn't
+  checked at all, so it manifested as confusing emptiness instead of a clear refusal. Fixed with
+  `worktree.ts`'s new `isCommittedAtHead()`, checked in `routes/debugSessions.ts` before minting a
+  session, returning a 400 that says exactly what's wrong.
+- All four caught via actually running the thing (three via a real `ws` client + real container,
+  one via reading the terminal's own literal output) — none would have surfaced from code review
+  alone. New regression coverage: `debugSessionWebsocket.test.ts` (2 tests, real container + real
+  websocket client, both handlers attached together) and a new case in
+  `debugSessionsRoutes.test.ts` for the uncommitted-spec 400. Full suite after all fixes: 76/76,
+  `tsc` clean (root and `web/`).
+
+### Decisions & deviations from PLAN.md
+- **`DebugSessionManager.start()` is now idempotent by `testId`**, not refuse-with-409 — a second
+  request for a test that already has an open session hands back the *same* session (with a
+  freshly minted token) instead of erroring. Originally matched a plain reading of "one active
+  session per test," but caught live: this made a page refresh (or, incidentally, React
+  StrictMode's dev-mode double-effect-invoke) a permanent dead end until the 10-minute idle
+  timeout, with no way back in. A real user hitting refresh deserves to reconnect, not get locked
+  out — this is a genuine UX fix, not a StrictMode workaround, and the underlying "at most N
+  concurrent distinct sessions" cap (`MAX_CONCURRENT_SESSIONS`) is unaffected since idempotent
+  reuse doesn't consume an extra slot.
+- **`DebugSession.start()` is likewise idempotent** — a second call (from the reconnect case
+  above) rebinds the `onData`/`onExit` callbacks to the already-running container/pty rather than
+  spawning a second one. No buffered replay of prior output on reconnect (unlike Phase 6's
+  screencast, which buffers/replays its last frame) — accepted gap, noted below.
+
+### Open questions for the human
+- **No buffered output replay on reconnect** — a browser refresh mid-session reconnects to the
+  same live container (see above) but starts with a blank terminal; whatever `claude` printed
+  before the refresh is gone from the UI (still fully present in the redacted audit log via
+  `GET .../audit-log`, just not replayed into xterm.js automatically). Worth adding if reconnects
+  turn out to be common in practice.
+- **Still no real `ANTHROPIC_API_KEY`/egress network in this sandbox** — verified everything up to
+  and including a real `claude` CLI launching correctly and cleanly failing closed on network
+  access; never verified an actual interactive AI-assisted fix session, since that needs both the
+  API key and `scripts/setup-debug-session-network.sh` run for real (still requires a human with
+  `sudo`, unchanged from earlier this session).
+- Same standing items as always: root-owned `test-results`/`playwright-report`, `main` still 8
+  phases behind, nothing on this branch committed yet.
+

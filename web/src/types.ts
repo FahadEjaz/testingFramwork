@@ -84,3 +84,18 @@ export interface RecordedAction {
   candidates: LocatorCandidate[];
   value?: string;
 }
+
+export type DebugSessionDiffStatus = 'pending' | 'approved' | 'rejected';
+
+export interface DebugSessionDiff {
+  id: string;
+  testId: string;
+  sessionId: string;
+  worktreePath: string;
+  diff: string;
+  files: string[];
+  baseHashes: Record<string, string>;
+  status: DebugSessionDiffStatus;
+  createdAt: string;
+  updatedAt: string;
+}

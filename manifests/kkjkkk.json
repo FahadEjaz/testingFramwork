@@ -99,7 +99,7 @@
       "fallbacks": [
         {
           "strategy": "text",
-          "value": "STIHL Shop Joondalup Collect Delivery 6/116 Winton RoadJoondalupWestern Australi"
+          "value": "STIHL Shop Joondalup"
         },
         {
           "strategy": "css",

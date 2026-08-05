@@ -83,6 +83,11 @@ export function RunDetailPage() {
       <div className={styles.header}>
         <h1>Run details</h1>
         <StatusLamp {...runLamp(run)} />
+        {run.status === 'failed' && (
+          <Link className={styles.debugButton} to={`/tests/${testId}/runs/${runId}/debug`}>
+            Open Debug Session
+          </Link>
+        )}
       </div>
 
       <div className={styles.meta}>

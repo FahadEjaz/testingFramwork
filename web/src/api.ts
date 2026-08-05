@@ -2,7 +2,16 @@
 // credentials; a 401 means they're stale/wrong, which the caller surfaces by logging out.
 import type { Credentials } from './auth/credentials';
 import { authHeader } from './auth/credentials';
-import type { AiUsageSummary, PendingFix, PendingFixStatus, RecordedAction, Run, TestCase } from './types';
+import type {
+  AiUsageSummary,
+  DebugSessionDiff,
+  DebugSessionDiffStatus,
+  PendingFix,
+  PendingFixStatus,
+  RecordedAction,
+  Run,
+  TestCase,
+} from './types';
 
 export class ApiError extends Error {
   status: number;
@@ -120,5 +129,42 @@ export function saveRecording(credentials: Credentials, sessionId: string, name:
   return request<TestCase>(credentials, `/api/recordings/${sessionId}/save`, {
     method: 'POST',
     body: JSON.stringify({ name }),
+  });
+}
+
+// Phase 12 spike (gated in REQUIREMENTS.md — see PROGRESS.md) — an in-app AI debug terminal,
+// only reachable for a failed run.
+export function startDebugSession(
+  credentials: Credentials,
+  testId: string,
+  runId: string
+): Promise<{ sessionId: string; token: string; wsPath: string }> {
+  return request(credentials, '/api/debug-sessions', { method: 'POST', body: JSON.stringify({ testId, runId }) });
+}
+
+export function submitDebugSession(credentials: Credentials, sessionId: string): Promise<DebugSessionDiff> {
+  return request<DebugSessionDiff>(credentials, `/api/debug-sessions/${sessionId}/submit`, { method: 'POST' });
+}
+
+export function discardDebugSession(credentials: Credentials, sessionId: string): Promise<void> {
+  return request<void>(credentials, `/api/debug-sessions/${sessionId}/discard`, { method: 'POST' });
+}
+
+export function listDebugSessionDiffs(
+  credentials: Credentials,
+  status?: DebugSessionDiffStatus
+): Promise<DebugSessionDiff[]> {
+  const query = status ? `?status=${status}` : '';
+  return request<DebugSessionDiff[]>(credentials, `/api/debug-session-diffs${query}`);
+}
+
+export function updateDebugSessionDiff(
+  credentials: Credentials,
+  id: string,
+  status: Extract<DebugSessionDiffStatus, 'approved' | 'rejected'>
+): Promise<DebugSessionDiff> {
+  return request<DebugSessionDiff>(credentials, `/api/debug-session-diffs/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
   });
 }

@@ -17,10 +17,14 @@ function attachRecordingWebsocket(httpServer: any, sessionManager: any): void {
   httpServer.on('upgrade', (req: any, socket: any, head: any) => {
     const { pathname } = new URL(req.url, 'http://localhost');
     const match = pathname.match(/^\/ws\/recordings\/([^/]+)$/);
-    if (!match) {
-      socket.destroy();
-      return;
-    }
+    // Not ours — let another handler (Phase 12's debug-session ws) claim it. Destroying here used
+    // to be harmless when this was the only websocket handler on the server; now that a second
+    // one shares the same httpServer 'upgrade' event, destroying unconditionally killed every
+    // debug-session connection before its own handler (registered second, so it runs after this
+    // one) ever got a chance to look at it — caught live via a real websocket client that saw
+    // "socket hang up" on every single connection attempt, no matter what this handler's own logic
+    // did.
+    if (!match) return;
 
     const sessionId = match[1];
     const session = sessionManager.get(sessionId);

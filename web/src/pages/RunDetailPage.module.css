@@ -13,6 +13,22 @@
   margin-bottom: 6px;
 }
 
+.debugButton {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--healed-amber);
+  border: none;
+  border-radius: 6px;
+  padding: 7px 14px;
+  text-decoration: none;
+}
+
+.debugButton:hover {
+  opacity: 0.9;
+}
+
 .meta {
   font-size: 13px;
   color: var(--slate);

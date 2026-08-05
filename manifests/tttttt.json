@@ -1,0 +1,73 @@
+{
+  "spec": "tests/tttttt.spec.ts",
+  "elements": {
+    "element1": {
+      "primary": {
+        "strategy": "role",
+        "role": "textbox"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "#customer-email"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(3) > form > div > div:nth-of-type(1) > div > input"
+        }
+      ]
+    },
+    "element2": {
+      "primary": {
+        "strategy": "role",
+        "role": "textbox"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "#pass"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(3) > form > div > div:nth-of-type(2) > div > input"
+        }
+      ]
+    },
+    "element3": {
+      "primary": {
+        "strategy": "role",
+        "role": "combobox"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "#minisearch-input-top-search"
+        },
+        {
+          "strategy": "placeholder",
+          "value": "Search our products"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(2) > div:nth-of-type(2) > form > div:nth-of-type(1) > div > input"
+        }
+      ]
+    },
+    "element4": {
+      "primary": {
+        "strategy": "css",
+        "value": "span > img"
+      },
+      "fallbacks": [
+        {
+          "strategy": "css",
+          "value": "li:nth-of-type(2) > div > a > span > span > img"
+        },
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-0__"
+        }
+      ]
+    }
+  }
+}

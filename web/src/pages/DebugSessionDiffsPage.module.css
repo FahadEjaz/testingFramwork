@@ -1,0 +1,119 @@
+.subhead {
+  font-size: 13px;
+  color: var(--slate);
+  margin-top: 8px;
+  margin-bottom: 20px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper-raised);
+  padding: 16px 18px;
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.cardTitle {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cardSpec {
+  font-size: 12px;
+  color: var(--slate);
+  text-decoration: none;
+  display: inline-block;
+  margin-top: 2px;
+}
+
+.cardSpec:hover {
+  color: var(--signal-blue);
+}
+
+.error {
+  color: var(--fail-crimson);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.diff {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  background: var(--paper);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin: 0 0 14px;
+  overflow-x: auto;
+  white-space: pre;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.diffAdd {
+  color: var(--pass-teal);
+}
+
+.diffDel {
+  color: var(--fail-crimson);
+}
+
+.diffHunk {
+  color: var(--signal-blue);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.reject {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--slate);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.reject:hover {
+  color: var(--fail-crimson);
+  border-color: var(--fail-crimson);
+}
+
+.approve {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--pass-teal);
+  border: none;
+  border-radius: 6px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.empty {
+  padding: 40px 18px;
+  text-align: center;
+  color: var(--slate);
+  font-size: 13.5px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper-raised);
+}
