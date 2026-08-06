@@ -20,7 +20,7 @@ const jsonHeaders = { Authorization: authHeader, 'Content-Type': 'application/js
 function withServer(fn: (ctx: { baseUrl: string; dataDir: string }) => Promise<void>) {
   return async () => {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'phase4-test-'));
-    const { app } = createApp({ repoRoot, dataDir, credentials, skipDebugSessionSweep: true });
+    const { app } = createApp({ repoRoot, dataDir, credentials });
     const server = app.listen(0);
     await new Promise((resolve) => server.once('listening', resolve));
     const port = (server.address() as { port: number }).port;
@@ -57,15 +57,18 @@ test(
 test(
   'create/list/rename/delete a test case',
   withServer(async ({ baseUrl }) => {
-    const createRes = await fetch(`${baseUrl}/api/tests`, {
-      method: 'POST',
-      headers: jsonHeaders,
-      body: JSON.stringify({ name: 'Smoke test', specPath: 'tests/smoke.spec.ts' }),
-    });
-    assert.equal(createRes.status, 201);
+    const tempSpec = path.join(repoRoot, 'tests', 'temp-test-delete.spec.ts');
+    fs.writeFileSync(tempSpec, '// temp spec for delete test\n');
+    try {
+      const createRes = await fetch(`${baseUrl}/api/tests`, {
+        method: 'POST',
+        headers: jsonHeaders,
+        body: JSON.stringify({ name: 'Smoke test', specPath: 'tests/temp-test-delete.spec.ts' }),
+      });
+      assert.equal(createRes.status, 201);
     const created: any = await createRes.json();
     assert.equal(created.name, 'Smoke test');
-    assert.equal(created.specPath, 'tests/smoke.spec.ts');
+    assert.equal(created.specPath, 'tests/temp-test-delete.spec.ts');
 
     const list: any = await (await fetch(`${baseUrl}/api/tests`, { headers: jsonHeaders })).json();
     assert.equal(list.length, 1);
@@ -73,7 +76,7 @@ test(
     const dupRes = await fetch(`${baseUrl}/api/tests`, {
       method: 'POST',
       headers: jsonHeaders,
-      body: JSON.stringify({ name: 'dup', specPath: 'tests/smoke.spec.ts' }),
+      body: JSON.stringify({ name: 'dup', specPath: 'tests/temp-test-delete.spec.ts' }),
     });
     assert.equal(dupRes.status, 409);
 
@@ -90,6 +93,9 @@ test(
 
     const afterDelete: any = await (await fetch(`${baseUrl}/api/tests`, { headers: jsonHeaders })).json();
     assert.equal(afterDelete.length, 0);
+    } finally {
+      if (fs.existsSync(tempSpec)) fs.unlinkSync(tempSpec);
+    }
   })
 );
 

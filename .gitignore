@@ -8,4 +8,3 @@ playwright/.cache/
 .claude/
 server/data/
 .playwright-mcp/
-.debug-worktrees/

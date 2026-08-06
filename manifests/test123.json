@@ -1,0 +1,199 @@
+{
+  "spec": "tests/test123.spec.ts",
+  "elements": {
+    "element1": {
+      "primary": {
+        "strategy": "role",
+        "role": "button",
+        "name": "Close"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "Close"
+        },
+        {
+          "strategy": "css",
+          "value": "div:nth-of-type(4) > div:nth-of-type(2) > div > div > div:nth-of-type(2) > button"
+        }
+      ]
+    },
+    "element2": {
+      "primary": {
+        "strategy": "css",
+        "value": "li:nth-of-type(1) > div > a > span > span > img"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-0__"
+        },
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-1__"
+        }
+      ]
+    },
+    "element3": {
+      "primary": {
+        "strategy": "css",
+        "value": "div:nth-of-type(1) > div > div:nth-of-type(1) > span:nth-of-type(2) > button > span"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-0__"
+        },
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-1__"
+        }
+      ]
+    },
+    "element4": {
+      "primary": {
+        "strategy": "css",
+        "value": "div:nth-of-type(1) > div > div:nth-of-type(1) > span:nth-of-type(2) > button > span"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-0__"
+        },
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-1__"
+        }
+      ]
+    },
+    "element5": {
+      "primary": {
+        "strategy": "text",
+        "value": "Select Dealer"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-0__"
+        },
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-1__"
+        }
+      ]
+    },
+    "element6": {
+      "primary": {
+        "strategy": "text",
+        "value": "Select Store"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-0__"
+        },
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-1__"
+        }
+      ]
+    },
+    "element7": {
+      "primary": {
+        "strategy": "text",
+        "value": "Home Hardware Karratha • Contact Dealer for availability 8/3813 Balmoral RoadKar"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-0__"
+        },
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-1__"
+        }
+      ]
+    },
+    "element8": {
+      "primary": {
+        "strategy": "css",
+        "value": "div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(4) > div"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-0__"
+        },
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-1__"
+        }
+      ]
+    },
+    "element9": {
+      "primary": {
+        "strategy": "css",
+        "value": "div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(4) > div"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-0__"
+        },
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-1__"
+        }
+      ]
+    },
+    "element10": {
+      "primary": {
+        "strategy": "css",
+        "value": "div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(4) > div"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-0__"
+        },
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-1__"
+        }
+      ]
+    },
+    "element11": {
+      "primary": {
+        "strategy": "css",
+        "value": "div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(4) > div"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-0__"
+        },
+        {
+          "strategy": "text",
+          "value": "__no-fallback-recorded-1__"
+        }
+      ]
+    },
+    "element12": {
+      "primary": {
+        "strategy": "role",
+        "role": "link",
+        "name": "About Us"
+      },
+      "fallbacks": [
+        {
+          "strategy": "text",
+          "value": "About Us"
+        },
+        {
+          "strategy": "css",
+          "value": "div > div:nth-of-type(3) > div > ul > li:nth-of-type(2) > a"
+        }
+      ]
+    }
+  }
+}

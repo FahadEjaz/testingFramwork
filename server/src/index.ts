@@ -4,7 +4,6 @@ const path = require('path');
 const http = require('http');
 const { createApp } = require('./app.ts');
 const { attachRecordingWebsocket } = require('./recording/websocketHandler.ts');
-const { attachDebugSessionWebsocket } = require('./debugSession/websocketHandler.ts');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const dataDir = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(repoRoot, 'server', 'data');
@@ -16,14 +15,9 @@ if (!username || !password) {
   process.exit(1);
 }
 
-const { app, sessionManager, debugSessionManager } = createApp({
-  repoRoot,
-  dataDir,
-  credentials: { username, password },
-});
+const { app, sessionManager } = createApp({ repoRoot, dataDir, credentials: { username, password } });
 const server = http.createServer(app);
 attachRecordingWebsocket(server, sessionManager);
-attachDebugSessionWebsocket(server, debugSessionManager);
 
 const port = Number(process.env.PORT) || 4000;
 

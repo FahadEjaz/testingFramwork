@@ -1,0 +1,39 @@
+{
+  "spec": "tests/smoke.spec.ts",
+  "elements": {
+    "getStartedLink": {
+      "primary": {
+        "strategy": "role",
+        "role": "link",
+        "name": "Get started"
+      },
+      "fallbacks": [
+        {
+          "strategy": "testId",
+          "value": "TODO-get-started-link"
+        },
+        {
+          "strategy": "css",
+          "value": "TODO: fill in a css value for getStartedLink"
+        }
+      ]
+    },
+    "heading": {
+      "primary": {
+        "strategy": "role",
+        "role": "heading",
+        "name": "Installation"
+      },
+      "fallbacks": [
+        {
+          "strategy": "testId",
+          "value": "TODO-heading"
+        },
+        {
+          "strategy": "css",
+          "value": "TODO: fill in a css value for heading"
+        }
+      ]
+    }
+  }
+}

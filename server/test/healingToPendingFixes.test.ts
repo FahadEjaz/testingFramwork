@@ -48,7 +48,7 @@ function fakeRunSpec(healingEvents: any[]) {
 function withServer(runSpec: unknown, fn: (ctx: { baseUrl: string }) => Promise<void>) {
   return async () => {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'phase8-healing-test-'));
-    const { app } = createApp({ repoRoot, dataDir, credentials, runSpec, skipDebugSessionSweep: true });
+    const { app } = createApp({ repoRoot, dataDir, credentials, runSpec });
     const server = app.listen(0);
     await new Promise((resolve) => server.once('listening', resolve));
     const port = (server.address() as { port: number }).port;

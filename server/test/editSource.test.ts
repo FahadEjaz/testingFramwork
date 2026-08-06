@@ -21,7 +21,7 @@ function withServer(fn: (ctx: { baseUrl: string }) => Promise<void>) {
   return async () => {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'edit-source-test-'));
     fs.writeFileSync(fixtureSpecAbsolute, VALID_SOURCE);
-    const { app } = createApp({ repoRoot, dataDir, credentials, skipDebugSessionSweep: true });
+    const { app } = createApp({ repoRoot, dataDir, credentials });
     const server = app.listen(0);
     await new Promise((resolve) => server.once('listening', resolve));
     const port = (server.address() as { port: number }).port;

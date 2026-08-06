@@ -80,6 +80,20 @@ function recorderScriptSource() {
     return null;
   }
 
+  // A structural CSS path (tag + :nth-of-type) has no idea whether it's actually unique on a
+  // real page — on a simple demo site it usually is, but a complex site full of modals/repeated
+  // cards (the strict-mode violation this was written to fix: `button > span` matching 11
+  // elements) can make the same path match many elements. Reject it outright rather than
+  // recording a candidate that will fail at runtime — codegen.ts's filler padding already
+  // handles an element with too few real candidates.
+  function isUniqueCss(selector: string): boolean {
+    try {
+      return document.querySelectorAll(selector).length === 1;
+    } catch {
+      return false;
+    }
+  }
+
   function candidatesFor(el: DomElement): unknown[] {
     const candidates: unknown[] = [];
     const seen = new Set<string>();
@@ -100,13 +114,15 @@ function recorderScriptSource() {
     if (role && name) add({ strategy: 'role', role, name });
     else if (role) add({ strategy: 'role', role });
 
-    add({ strategy: 'css', value: shortCssPath(el) });
+    const shortCss = shortCssPath(el);
+    if (isUniqueCss(shortCss)) add({ strategy: 'css', value: shortCss });
 
     const placeholder = el.getAttribute('placeholder');
     if (placeholder) add({ strategy: 'placeholder', value: placeholder });
     if (name) add({ strategy: 'text', value: name });
 
-    add({ strategy: 'css', value: fullCssPath(el) });
+    const fullCss = fullCssPath(el);
+    if (isUniqueCss(fullCss)) add({ strategy: 'css', value: fullCss });
 
     return candidates.slice(0, 4);
   }

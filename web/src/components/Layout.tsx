@@ -1,13 +1,11 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import { useDebugSessionDiffsCount } from '../state/DebugSessionDiffsCountContext';
 import { usePendingFixesCount } from '../state/PendingFixesCountContext';
 import styles from './Layout.module.css';
 
 export function Layout() {
   const { credentials, logout } = useAuth();
   const { count: pendingCount } = usePendingFixesCount();
-  const { count: debugDiffsCount } = useDebugSessionDiffsCount();
 
   return (
     <div className={styles.shell}>
@@ -33,13 +31,6 @@ export function Layout() {
           >
             Pending Fixes
             {pendingCount > 0 && <span className={styles.badge}>{pendingCount}</span>}
-          </NavLink>
-          <NavLink
-            to="/debug-diffs"
-            className={({ isActive }) => `${styles.navLink} ${isActive ? styles.navLinkActive : ''}`}
-          >
-            Debug Diffs
-            {debugDiffsCount > 0 && <span className={styles.badge}>{debugDiffsCount}</span>}
           </NavLink>
         </nav>
 

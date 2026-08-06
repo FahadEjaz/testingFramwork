@@ -13,6 +13,7 @@ const crypto = require('crypto');
 const defaultRunSpec = require('../runner.ts').runSpec;
 const { RunManager } = require('../execution/runManager.ts');
 const { checkSyntax } = require('../../../scripts/lib/check-syntax.js');
+const { manifestPathForSpec } = require('../../../scripts/lib/manifest.js');
 
 export interface TestsRouterDeps {
   repoRoot: string;
@@ -72,8 +73,18 @@ function createTestsRouter({
   });
 
   router.delete('/tests/:id', (req: Request<{ id: string }>, res: Response) => {
-    const removed = testsStore.remove(req.params.id);
-    if (!removed) return res.status(404).json({ error: 'test case not found' });
+    const test = testsStore.get(req.params.id);
+    if (!test) return res.status(404).json({ error: 'test case not found' });
+    testsStore.remove(req.params.id);
+
+    // Best-effort: the test case record is already gone regardless of whether the files on disk
+    // can be removed (e.g. already deleted by hand) — never leave a 500 that implies the delete
+    // itself failed.
+    const specPath = path.join(repoRoot, test.specPath);
+    if (fs.existsSync(specPath)) fs.unlinkSync(specPath);
+    const manifestPath = manifestPathForSpec(repoRoot, test.specPath);
+    if (fs.existsSync(manifestPath)) fs.unlinkSync(manifestPath);
+
     res.status(204).end();
   });
 
